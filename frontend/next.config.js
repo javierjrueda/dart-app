@@ -10,8 +10,7 @@ const nextConfig = {
     domains: ["localhost", "res.cloudinary.com", "images.unsplash.com"],
   },
   env: {
-    NEXT_PUBLIC_API_URL:
-      process.env.NEXT_PUBLIC_API_URL || "http://localhost:3001/api",
+    NEXT_PUBLIC_API_URL: process.env.NEXT_PUBLIC_API_URL,
     MONGODB_URI: process.env.MONGODB_URI,
     NEXTAUTH_SECRET: process.env.NEXTAUTH_SECRET,
     NEXTAUTH_URL: process.env.NEXTAUTH_URL,
@@ -19,6 +18,16 @@ const nextConfig = {
     GOOGLE_CLIENT_SECRET: process.env.GOOGLE_CLIENT_SECRET,
   },
   output: "standalone",
+  reactStrictMode: true,
+  async redirects() {
+    return [
+      {
+        source: "/",
+        destination: "/dashboard",
+        permanent: false,
+      },
+    ];
+  },
 };
 
 module.exports = nextConfig;

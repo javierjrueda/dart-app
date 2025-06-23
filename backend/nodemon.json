@@ -1,6 +1,11 @@
 {
   "watch": ["src"],
   "ext": "ts,json",
-  "ignore": ["src/**/*.spec.ts", "src/**/*.test.ts"],
+  "ignore": [
+    "src/**/*.spec.ts",
+    "src/**/*.test.ts",
+    "**/upload-sessions/**",
+    "**/temp/**"
+  ],
   "exec": "ts-node -r tsconfig-paths/register src/server.ts"
 }

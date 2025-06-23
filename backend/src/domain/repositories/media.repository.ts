@@ -9,4 +9,7 @@ export interface MediaRepository {
   delete(id: string): Promise<boolean>;
   findByMediaType(mediaType: "image" | "video"): Promise<Media[]>;
   findByEloRange(minElo: number, maxElo: number): Promise<Media[]>;
+  findByPromptDescription(promptDescription: string): Promise<Media[]>;
+  findByFilename(projectId: string, filename: string): Promise<Media | null>;
+  findExistingFilenames(projectId: string): Promise<string[]>;
 }

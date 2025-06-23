@@ -4,6 +4,7 @@ import { userRoutes } from "./user.routes";
 import { authRoutes } from "./auth.routes";
 import projectRoutes from "./project.routes";
 import { mediaRoutes } from "./media.routes";
+import battleRoutes from "./battle.routes";
 
 const router = Router();
 
@@ -28,5 +29,6 @@ router.use(`${API_VERSION}/dreamshots`, dreamshotRoutes);
 router.use(`${API_VERSION}/users`, userRoutes);
 router.use(`${API_VERSION}/projects`, projectRoutes);
 router.use(`${API_VERSION}`, mediaRoutes);
+router.use(`${API_VERSION}/battles`, battleRoutes);
 
 export { router as routes };

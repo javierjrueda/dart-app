@@ -64,6 +64,7 @@ export class MediaController {
     try {
       const { projectId } = req.params;
       const file = req.file;
+      const { loraTraining, promptDescription, extractionMethod } = req.body;
 
       if (!file) {
         return res.status(400).json({ error: "No file uploaded" });
@@ -89,11 +90,15 @@ export class MediaController {
         projectId
       );
 
-      // Save media record to database
+      // Save media record to database with metadata extraction
       const media = await this.mediaUseCases.createMedia({
         projectId,
         mediaUrl: uploadResult.url,
         mediaType,
+        loraTraining: loraTraining || undefined,
+        promptDescription: promptDescription || undefined,
+        extractionMethod: extractionMethod || "filename",
+        filename: file.originalname,
       });
 
       return res.status(201).json({
@@ -128,6 +133,33 @@ export class MediaController {
       console.error("Get media error:", error);
       return res.status(500).json({
         error: error instanceof Error ? error.message : "Failed to get media",
+      });
+    }
+  }
+
+  async getExistingFilenames(req: Request, res: Response): Promise<Response> {
+    try {
+      const { projectId } = req.params;
+
+      if (!projectId) {
+        return res.status(400).json({ error: "Project ID is required" });
+      }
+
+      const filenames = await this.mediaUseCases.getExistingFilenames(
+        projectId
+      );
+
+      return res.json({
+        filenames,
+        count: filenames.length,
+      });
+    } catch (error) {
+      console.error("Get existing filenames error:", error);
+      return res.status(500).json({
+        error:
+          error instanceof Error
+            ? error.message
+            : "Failed to get existing filenames",
       });
     }
   }
@@ -233,25 +265,30 @@ export class MediaController {
   async getPresignedUrl(req: Request, res: Response): Promise<Response> {
     try {
       const { projectId } = req.params;
-      const { fileName, contentType } = req.body;
+      const { fileName, fileType } = req.body;
 
-      if (!fileName || !contentType) {
+      if (!fileName || !fileType) {
         return res.status(400).json({
-          error: "fileName and contentType are required",
+          error: "fileName and fileType are required",
         });
       }
 
+      if (!projectId) {
+        return res.status(400).json({ error: "Project ID is required" });
+      }
+
       // Validate file type
-      const mediaType = this.getR2Service().validateFileType(contentType);
+      const mediaType = this.getR2Service().validateFileType(fileType);
       if (!mediaType) {
         return res.status(400).json({
           error: "Invalid file type. Only images and videos are allowed.",
         });
       }
 
+      // Generate presigned URL
       const presignedData = await this.getR2Service().generatePresignedUrl(
         fileName,
-        contentType,
+        fileType,
         projectId
       );
 
@@ -265,7 +302,505 @@ export class MediaController {
         error:
           error instanceof Error
             ? error.message
-            : "Failed to generate upload URL",
+            : "Failed to generate presigned URL",
+      });
+    }
+  }
+
+  async getMediaByPrompt(req: Request, res: Response): Promise<Response> {
+    try {
+      const { promptDescription } = req.query;
+
+      if (!promptDescription || typeof promptDescription !== "string") {
+        return res
+          .status(400)
+          .json({ error: "Prompt description is required" });
+      }
+
+      const media = await this.mediaUseCases.getMediaByPromptDescription(
+        promptDescription
+      );
+
+      return res.json({
+        media: media.map((m) => m.toJSON()),
+        count: media.length,
+      });
+    } catch (error) {
+      console.error("Get media by prompt error:", error);
+      return res.status(500).json({
+        error:
+          error instanceof Error
+            ? error.message
+            : "Failed to get media by prompt",
+      });
+    }
+  }
+
+  async updateMediaMetadata(req: Request, res: Response): Promise<Response> {
+    try {
+      const { id } = req.params;
+      const { loraTraining, promptDescription, generationParams } = req.body;
+
+      const media = await this.mediaUseCases.updateMediaMetadata(id, {
+        loraTraining,
+        promptDescription,
+        generationParams,
+      });
+
+      if (!media) {
+        return res.status(404).json({ error: "Media not found" });
+      }
+
+      return res.json({
+        message: "Media metadata updated successfully",
+        media: media.toJSON(),
+      });
+    } catch (error) {
+      console.error("Update media metadata error:", error);
+      return res.status(500).json({
+        error:
+          error instanceof Error
+            ? error.message
+            : "Failed to update media metadata",
+      });
+    }
+  }
+
+  async bulkUpload(req: Request, res: Response): Promise<Response> {
+    try {
+      // Only allow in development
+      if (process.env.NODE_ENV !== "development") {
+        return res
+          .status(403)
+          .json({ error: "Bulk upload only available in development" });
+      }
+
+      const { projectId } = req.params;
+      const {
+        folderPath,
+        batchSize = 10,
+        delay = 1000,
+        skipDuplicates = true,
+      } = req.body;
+
+      if (!folderPath) {
+        return res.status(400).json({ error: "Folder path is required" });
+      }
+
+      if (!projectId) {
+        return res.status(400).json({ error: "Project ID is required" });
+      }
+
+      // Import the bulk uploader
+      const BulkUploader = require("../../../scripts/bulk-upload");
+
+      // Get the auth token from current session
+      const authHeader = req.headers.authorization;
+      if (!authHeader || !authHeader.startsWith("Bearer ")) {
+        return res.status(401).json({ error: "Authentication required" });
+      }
+
+      const authToken = authHeader.substring(7);
+
+      // Create a unique upload session ID for tracking
+      const uploadSessionId = `upload_${Date.now()}_${Math.random()
+        .toString(36)
+        .substr(2, 9)}`;
+
+      // Store progress in memory (in production, you'd use Redis or similar)
+      (global as any).uploadProgress = (global as any).uploadProgress || {};
+      (global as any).uploadProgress[uploadSessionId] = {
+        status: "initializing",
+        totalFiles: 0,
+        processedFiles: 0,
+        successfulUploads: 0,
+        failedUploads: 0,
+        skippedUploads: 0,
+        currentFile: "",
+        startTime: new Date(),
+        errors: [],
+        completed: false,
+        cancelled: false,
+      };
+
+      // Create uploader instance with progress callbacks
+      const uploader = new BulkUploader({
+        projectId,
+        authToken,
+        batchSize: parseInt(batchSize),
+        delayBetweenBatches: parseInt(delay),
+        skipDuplicates: Boolean(skipDuplicates),
+        apiUrl: `${req.protocol}://${req.get("host")}/api/v1`,
+        uploadSessionId: uploadSessionId, // Pass session ID for cancellation support
+        onProgress: (progress: any) => {
+          if ((global as any).uploadProgress[uploadSessionId]) {
+            (global as any).uploadProgress[uploadSessionId] = {
+              ...(global as any).uploadProgress[uploadSessionId],
+              ...progress,
+              lastUpdate: new Date(),
+            };
+          }
+        },
+      });
+
+      // Start the upload process in background
+      setImmediate(async () => {
+        try {
+          await uploader.run(folderPath);
+          if ((global as any).uploadProgress[uploadSessionId]) {
+            (global as any).uploadProgress[uploadSessionId].status =
+              "completed";
+            (global as any).uploadProgress[uploadSessionId].completed = true;
+          }
+          console.log("✅ Bulk upload completed successfully");
+        } catch (error) {
+          if ((global as any).uploadProgress[uploadSessionId]) {
+            (global as any).uploadProgress[uploadSessionId].status = "failed";
+            (global as any).uploadProgress[uploadSessionId].error =
+              error instanceof Error ? error.message : String(error);
+            (global as any).uploadProgress[uploadSessionId].completed = true;
+          }
+          console.error("❌ Bulk upload failed:", error);
+        }
+      });
+
+      return res.json({
+        message: "Bulk upload started",
+        uploadSessionId,
+        projectId,
+        folderPath,
+        batchSize,
+        delay,
+        skipDuplicates,
+      });
+    } catch (error) {
+      console.error("Bulk upload error:", error);
+      return res.status(500).json({
+        error:
+          error instanceof Error
+            ? error.message
+            : "Failed to start bulk upload",
+      });
+    }
+  }
+
+  async getBulkUploadProgress(req: Request, res: Response): Promise<Response> {
+    try {
+      const { sessionId } = req.params;
+
+      if (
+        !(global as any).uploadProgress ||
+        !(global as any).uploadProgress[sessionId]
+      ) {
+        return res.status(404).json({ error: "Upload session not found" });
+      }
+
+      return res.json((global as any).uploadProgress[sessionId]);
+    } catch (error) {
+      console.error("Get progress error:", error);
+      return res.status(500).json({
+        error:
+          error instanceof Error ? error.message : "Failed to get progress",
+      });
+    }
+  }
+
+  async cancelBulkUpload(req: Request, res: Response): Promise<Response> {
+    try {
+      const { sessionId } = req.params;
+
+      if (
+        !(global as any).uploadProgress ||
+        !(global as any).uploadProgress[sessionId]
+      ) {
+        return res.status(404).json({ error: "Upload session not found" });
+      }
+
+      // Set cancellation flag
+      (global as any).uploadProgress[sessionId].cancelled = true;
+      (global as any).uploadProgress[sessionId].status = "cancelled";
+
+      console.log(`🛑 Bulk upload ${sessionId} cancelled by user`);
+
+      return res.json({
+        message: "Upload cancelled successfully",
+        sessionId,
+      });
+    } catch (error) {
+      console.error("Cancel upload error:", error);
+      return res.status(500).json({
+        error:
+          error instanceof Error ? error.message : "Failed to cancel upload",
+      });
+    }
+  }
+
+  async testR2Connection(req: Request, res: Response): Promise<Response> {
+    try {
+      // Only allow in development
+      if (process.env.NODE_ENV !== "development") {
+        return res
+          .status(403)
+          .json({ error: "Test endpoint only available in development" });
+      }
+
+      const { projectId } = req.params;
+      if (!projectId) {
+        return res.status(400).json({ error: "Project ID is required" });
+      }
+
+      // Create a tiny test file (just a few bytes)
+      const testContent = Buffer.from("test file content");
+      const testFileName = `test-${Date.now()}.txt`;
+
+      try {
+        const uploadResult = await this.getR2Service().uploadFile(
+          testContent,
+          testFileName,
+          "text/plain",
+          projectId
+        );
+
+        return res.json({
+          message: "R2 connection test successful",
+          testFile: {
+            fileName: testFileName,
+            size: testContent.length,
+            url: uploadResult.url,
+            key: uploadResult.key,
+          },
+        });
+      } catch (r2Error) {
+        console.error("R2 test failed:", r2Error);
+        return res.status(500).json({
+          error: "R2 connection test failed",
+          details: r2Error instanceof Error ? r2Error.message : String(r2Error),
+        });
+      }
+    } catch (error) {
+      console.error("Test R2 connection error:", error);
+      return res.status(500).json({
+        error:
+          error instanceof Error
+            ? error.message
+            : "Failed to test R2 connection",
+      });
+    }
+  }
+
+  async getBatchPresignedUrls(req: Request, res: Response): Promise<Response> {
+    try {
+      const { projectId } = req.params;
+      const { files } = req.body; // Array of { fileName, contentType, size }
+
+      if (!projectId) {
+        return res.status(400).json({ error: "Project ID is required" });
+      }
+
+      if (!files || !Array.isArray(files) || files.length === 0) {
+        return res.status(400).json({
+          error:
+            "Files array is required with fileName and contentType for each file",
+        });
+      }
+
+      // Validate batch size (prevent abuse)
+      if (files.length > 4000) {
+        return res.status(400).json({
+          error: "Maximum 4000 files per batch request",
+        });
+      }
+
+      console.log(
+        `🔍 Batch presigned URLs requested for ${files.length} files in project ${projectId}`
+      );
+
+      const r2Service = this.getR2Service();
+      const presignedUrls = [];
+      const validFiles = [];
+      const skippedFiles: Array<{ fileName: string; reason: string }> = [];
+
+      // Check for existing files to avoid duplicates
+      const existingFilenames = await this.mediaUseCases.getExistingFilenames(
+        projectId
+      );
+
+      console.log(
+        `📋 Found ${existingFilenames.length} existing files in project ${projectId}:`
+      );
+      console.log(
+        `   Existing filenames: [${existingFilenames.slice(0, 5).join(", ")}${
+          existingFilenames.length > 5 ? "..." : ""
+        }]`
+      );
+
+      const existingSet = new Set(
+        existingFilenames.map((f) => f.toLowerCase())
+      );
+
+      console.log(
+        `🎯 Processing ${files.length} incoming files for duplicates...`
+      );
+
+      for (const file of files) {
+        const fileNameLower = file.fileName.toLowerCase();
+
+        // Validate file type
+        const mediaType = r2Service.validateFileType(file.contentType);
+        if (!mediaType) {
+          console.log(
+            `❌ Skipping ${file.fileName}: Invalid file type (${file.contentType})`
+          );
+          skippedFiles.push({
+            fileName: file.fileName,
+            reason: "Invalid file type",
+          });
+          continue; // Skip invalid files
+        }
+
+        // Check for duplicates
+        if (existingSet.has(fileNameLower)) {
+          console.log(`🔄 Skipping ${file.fileName}: Duplicate found`);
+          skippedFiles.push({
+            fileName: file.fileName,
+            reason: "Duplicate file",
+          });
+          continue; // Skip duplicates
+        }
+
+        try {
+          const { uploadUrl, key, publicUrl } =
+            await r2Service.generatePresignedUrl(
+              file.fileName,
+              file.contentType,
+              projectId,
+              3600 // 1 hour expiry
+            );
+
+          presignedUrls.push({
+            fileName: file.fileName,
+            uploadUrl,
+            key,
+            publicUrl,
+            mediaType,
+          });
+
+          validFiles.push({
+            fileName: file.fileName,
+            key,
+            publicUrl,
+            mediaType,
+          });
+
+          console.log(`✅ Generated presigned URL for ${file.fileName}`);
+        } catch (error) {
+          console.error(
+            `❌ Failed to generate presigned URL for ${file.fileName}:`,
+            error
+          );
+          skippedFiles.push({
+            fileName: file.fileName,
+            reason: `URL generation failed: ${
+              error instanceof Error ? error.message : "Unknown error"
+            }`,
+          });
+        }
+      }
+
+      const totalSkipped = skippedFiles.length;
+      const duplicateCount = skippedFiles.filter(
+        (f) => f.reason === "Duplicate file"
+      ).length;
+      const invalidTypeCount = skippedFiles.filter(
+        (f) => f.reason === "Invalid file type"
+      ).length;
+
+      console.log(`📊 Batch processing complete:`);
+      console.log(`   ✅ Valid files with URLs: ${presignedUrls.length}`);
+      console.log(`   🔄 Skipped duplicates: ${duplicateCount}`);
+      console.log(`   ❌ Skipped invalid types: ${invalidTypeCount}`);
+      console.log(`   📋 Total skipped: ${totalSkipped}`);
+
+      return res.json({
+        presignedUrls,
+        validFiles,
+        totalRequested: files.length,
+        totalValid: presignedUrls.length,
+        skippedDuplicates: duplicateCount,
+        skippedInvalidTypes: invalidTypeCount,
+        skippedTotal: totalSkipped,
+        skippedDetails: skippedFiles.slice(0, 10), // Only return first 10 for debugging
+      });
+    } catch (error) {
+      console.error("Batch presigned URL error:", error);
+      return res.status(500).json({
+        error:
+          error instanceof Error
+            ? error.message
+            : "Failed to generate presigned URLs",
+      });
+    }
+  }
+
+  async confirmBatchUpload(req: Request, res: Response): Promise<Response> {
+    try {
+      const { projectId } = req.params;
+      const { uploadedFiles } = req.body; // Array of { fileName, key, publicUrl, mediaType }
+
+      if (!projectId) {
+        return res.status(400).json({ error: "Project ID is required" });
+      }
+
+      if (!uploadedFiles || !Array.isArray(uploadedFiles)) {
+        return res
+          .status(400)
+          .json({ error: "uploadedFiles array is required" });
+      }
+
+      const createdMedia: any[] = [];
+      const errors: Array<{ fileName: string; error: string }> = [];
+
+      // Process in smaller batches to avoid overwhelming the database
+      const batchSize = 20;
+      for (let i = 0; i < uploadedFiles.length; i += batchSize) {
+        const batch = uploadedFiles.slice(i, i + batchSize);
+
+        const batchPromises = batch.map(async (file) => {
+          try {
+            const media = await this.mediaUseCases.createMedia({
+              projectId,
+              mediaUrl: file.publicUrl,
+              mediaType: file.mediaType,
+              filename: file.fileName,
+              extractionMethod: "filename",
+            });
+            return media.toJSON();
+          } catch (error) {
+            errors.push({
+              fileName: file.fileName,
+              error: error instanceof Error ? error.message : "Unknown error",
+            });
+            return null;
+          }
+        });
+
+        const batchResults = await Promise.all(batchPromises);
+        createdMedia.push(...batchResults.filter(Boolean));
+      }
+
+      return res.json({
+        message: "Batch upload confirmation completed",
+        created: createdMedia.length,
+        errors: errors.length,
+        errorDetails: errors,
+      });
+    } catch (error) {
+      console.error("Batch upload confirmation error:", error);
+      return res.status(500).json({
+        error:
+          error instanceof Error
+            ? error.message
+            : "Failed to confirm batch upload",
       });
     }
   }

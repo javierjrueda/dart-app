@@ -14,12 +14,21 @@ import {
 } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import MediaUpload from "@/components/MediaUpload";
+import BulkUploadModal from "@/components/BulkUploadModal";
+import OptimizedBulkUpload from "@/components/OptimizedBulkUpload";
+import BattleArena from "@/components/BattleArena";
+import Leaderboard from "@/components/Leaderboard";
+import { ToastProvider, useToast } from "@/components/ToastContainer";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import {
   faPlus,
   faUpload,
   faImage,
   faVideo,
+  faFolderOpen,
+  faBolt,
+  faImages,
+  faTrophy,
 } from "@fortawesome/free-solid-svg-icons";
 
 interface Project {
@@ -36,11 +45,15 @@ interface Media {
   mediaUrl: string;
   mediaType: "image" | "video";
   elo: number;
+  loraTraining?: string;
+  promptDescription?: string;
+  generationParams?: Record<string, any>;
+  extractionMethod: "filename" | "metadata" | "manual";
   createdAt: string;
   updatedAt: string;
 }
 
-export default function ProjectDetailPage() {
+function ProjectDetailPageContent() {
   const { data: session, status } = useSession();
   const router = useRouter();
   const params = useParams();
@@ -52,6 +65,13 @@ export default function ProjectDetailPage() {
   const [mediaLoading, setMediaLoading] = useState(false);
   const [error, setError] = useState("");
   const [showUpload, setShowUpload] = useState(false);
+  const [showBulkUpload, setShowBulkUpload] = useState(false);
+  const [showOptimizedUpload, setShowOptimizedUpload] = useState(false);
+  const [activeTab, setActiveTab] = useState<
+    "gallery" | "battle" | "leaderboard"
+  >("gallery");
+
+  const { addToast } = useToast();
 
   useEffect(() => {
     if (!isPending && !session) {
@@ -142,6 +162,64 @@ export default function ProjectDetailPage() {
     setShowUpload(false);
   };
 
+  const handleOptimizedUploadComplete = (results?: any) => {
+    if (results) {
+      const { totalFiles, successful, failed, skippedDuplicates, duration } =
+        results;
+
+      // Show success toast with detailed results
+      if (successful > 0) {
+        addToast({
+          type: "success",
+          title: "Bulk Upload Completed!",
+          description: `Uploaded ${successful}/${totalFiles} files in ${duration.toFixed(
+            1
+          )}s${
+            skippedDuplicates > 0
+              ? `, skipped ${skippedDuplicates} duplicates`
+              : ""
+          }`,
+          duration: 8000,
+        });
+      }
+
+      // Show info toast for duplicates (even if no new uploads)
+      if (skippedDuplicates > 0 && successful === 0) {
+        addToast({
+          type: "info",
+          title: "Duplicates Detected",
+          description: `${skippedDuplicates} files were skipped because they already exist in your project.`,
+          duration: 6000,
+        });
+      }
+
+      // Show warning toast if there were failures
+      if (failed > 0) {
+        addToast({
+          type: "warning",
+          title: "Some uploads failed",
+          description: `${failed} files failed to upload. Check the console for details.`,
+          duration: 10000,
+        });
+      }
+
+      // Enhanced console logging
+      console.log("📊 Upload Results Summary:");
+      console.log(`  ✅ Successful: ${successful}/${totalFiles}`);
+      console.log(`  ❌ Failed: ${failed}`);
+      console.log(`  🔄 Skipped duplicates: ${skippedDuplicates}`);
+      console.log(`  ⏱️ Duration: ${duration.toFixed(1)} seconds`);
+      if (successful > 0) {
+        console.log(
+          `  🚀 Average speed: ${(successful / duration).toFixed(1)} files/sec`
+        );
+      }
+    }
+
+    fetchMedia();
+    setShowOptimizedUpload(false);
+  };
+
   if (isPending) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-neutral-50">
@@ -203,6 +281,15 @@ export default function ProjectDetailPage() {
               <FontAwesomeIcon icon={faUpload} className="mr-2" />
               Upload Media
             </Button>
+            {/* Optimized Bulk Upload button */}
+            <Button
+              onClick={() => setShowOptimizedUpload(true)}
+              variant="outline"
+              className="border-accent-300 text-accent-600 hover:bg-accent-50"
+            >
+              <FontAwesomeIcon icon={faFolderOpen} className="mr-2" />
+              Bulk Upload
+            </Button>
             <Button variant="outline" onClick={() => router.push("/dashboard")}>
               ← Back to Dashboard
             </Button>
@@ -211,8 +298,8 @@ export default function ProjectDetailPage() {
 
         {/* Upload Modal */}
         {showUpload && (
-          <div className="fixed inset-0 bg-neutral-900 bg-opacity-50 flex items-center justify-center z-50">
-            <div className="bg-white rounded-lg p-6 max-w-lg w-full mx-4">
+          <div className="fixed inset-0 backdrop-blur-sm bg-black/10 flex items-center justify-center z-50">
+            <div className="bg-white/95 backdrop-blur-md rounded-lg p-6 max-w-lg w-full mx-4 shadow-2xl border border-white/20">
               <MediaUpload
                 projectId={projectId}
                 onUploadSuccess={handleUploadSuccess}
@@ -264,96 +351,183 @@ export default function ProjectDetailPage() {
           </CardContent>
         </Card>
 
-        {/* Media Gallery Card */}
+        {/* Optimized Bulk Upload Modal */}
+        {showOptimizedUpload && (
+          <OptimizedBulkUpload
+            projectId={projectId}
+            onClose={handleOptimizedUploadComplete}
+            onUploadComplete={() => {
+              fetchMedia();
+            }}
+          />
+        )}
+
+        {/* Old Bulk Upload Modal (kept for reference) */}
+        {showBulkUpload && (
+          <BulkUploadModal
+            projectId={projectId}
+            onClose={() => setShowBulkUpload(false)}
+            onUploadComplete={() => {
+              fetchMedia();
+              setShowBulkUpload(false);
+            }}
+          />
+        )}
+
+        {/* Tabbed Content */}
         <Card>
           <CardHeader>
-            <CardTitle>Media Gallery</CardTitle>
-            <CardDescription>
-              {media.length > 0
-                ? `${media.length} ${
-                    media.length === 1 ? "item" : "items"
-                  } in this project`
-                : "No media uploaded yet"}
-            </CardDescription>
+            {/* Tab Navigation */}
+            <div className="flex space-x-1 bg-neutral-100 p-1 rounded-lg">
+              <button
+                onClick={() => setActiveTab("gallery")}
+                className={`flex-1 flex items-center justify-center px-4 py-2 rounded-md text-sm font-medium transition-colors ${
+                  activeTab === "gallery"
+                    ? "bg-white text-primary-700 shadow-sm"
+                    : "text-neutral-600 hover:text-primary-600"
+                }`}
+              >
+                <FontAwesomeIcon icon={faImages} className="mr-2" />
+                Gallery ({media.length})
+              </button>
+              <button
+                onClick={() => setActiveTab("battle")}
+                className={`flex-1 flex items-center justify-center px-4 py-2 rounded-md text-sm font-medium transition-colors ${
+                  activeTab === "battle"
+                    ? "bg-white text-primary-700 shadow-sm"
+                    : "text-neutral-600 hover:text-primary-600"
+                }`}
+              >
+                <FontAwesomeIcon icon={faBolt} className="mr-2" />
+                Battle Arena
+              </button>
+              <button
+                onClick={() => setActiveTab("leaderboard")}
+                className={`flex-1 flex items-center justify-center px-4 py-2 rounded-md text-sm font-medium transition-colors ${
+                  activeTab === "leaderboard"
+                    ? "bg-white text-primary-700 shadow-sm"
+                    : "text-neutral-600 hover:text-primary-600"
+                }`}
+              >
+                <FontAwesomeIcon icon={faTrophy} className="mr-2" />
+                Leaderboard
+              </button>
+            </div>
           </CardHeader>
           <CardContent>
-            {mediaLoading ? (
-              <div className="flex items-center justify-center py-8">
-                <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary-500"></div>
-              </div>
-            ) : media.length > 0 ? (
-              <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-4">
-                {media.map((item) => (
-                  <div
-                    key={item.id}
-                    className="relative group aspect-square bg-neutral-100 rounded-lg overflow-hidden"
-                  >
-                    {item.mediaType === "image" ? (
-                      <img
-                        src={item.mediaUrl}
-                        alt="Project media"
-                        className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-200"
-                      />
-                    ) : (
-                      <div className="w-full h-full flex items-center justify-center bg-neutral-200">
-                        <FontAwesomeIcon
-                          icon={faVideo}
-                          className="text-2xl text-neutral-400"
-                        />
-                        <video
-                          src={item.mediaUrl}
-                          className="absolute inset-0 w-full h-full object-cover"
-                          muted
-                        />
-                      </div>
-                    )}
-
-                    {/* Media Type Badge */}
-                    <div className="absolute top-2 right-2 bg-neutral-900 bg-opacity-75 text-white px-2 py-1 rounded text-xs">
-                      <FontAwesomeIcon
-                        icon={item.mediaType === "image" ? faImage : faVideo}
-                        className="mr-1"
-                      />
-                      {item.mediaType}
-                    </div>
-
-                    {/* ELO Badge */}
-                    <div className="absolute bottom-2 left-2 bg-primary-500 text-white px-2 py-1 rounded text-xs font-medium">
-                      ELO: {item.elo}
-                    </div>
+            {/* Tab Content */}
+            {activeTab === "gallery" && (
+              <>
+                {mediaLoading ? (
+                  <div className="flex items-center justify-center py-8">
+                    <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary-500"></div>
                   </div>
-                ))}
-              </div>
-            ) : (
-              <div className="flex flex-col items-center justify-center py-12">
-                <div
-                  className="w-24 h-24 border-2 border-dashed border-neutral-300 rounded-full flex items-center justify-center mb-4 cursor-pointer hover:border-primary-400 hover:bg-primary-50 transition-colors"
-                  onClick={() => setShowUpload(true)}
-                >
-                  <FontAwesomeIcon
-                    icon={faPlus}
-                    className="text-2xl text-neutral-400 hover:text-primary-500"
-                  />
-                </div>
-                <h3 className="text-lg font-medium text-neutral-900 mb-2">
-                  Add Media
-                </h3>
-                <p className="text-neutral-500 text-center max-w-sm">
-                  Upload your first image or video to get started with your
-                  project gallery.
-                </p>
-                <Button
-                  onClick={() => setShowUpload(true)}
-                  className="mt-4 bg-accent-400 hover:bg-accent-500 text-white"
-                >
-                  <FontAwesomeIcon icon={faPlus} className="mr-2" />
-                  Add Media
-                </Button>
-              </div>
+                ) : media.length > 0 ? (
+                  <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-4">
+                    {media.map((item) => (
+                      <div
+                        key={item.id}
+                        className="relative group aspect-square bg-neutral-100 rounded-lg overflow-hidden"
+                      >
+                        {item.mediaType === "image" ? (
+                          <img
+                            src={item.mediaUrl}
+                            alt="Project media"
+                            className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-200"
+                          />
+                        ) : (
+                          <div className="w-full h-full flex items-center justify-center bg-neutral-200">
+                            <FontAwesomeIcon
+                              icon={faVideo}
+                              className="text-2xl text-neutral-400"
+                            />
+                            <video
+                              src={item.mediaUrl}
+                              className="absolute inset-0 w-full h-full object-cover"
+                              muted
+                            />
+                          </div>
+                        )}
+
+                        {/* Media Type Badge */}
+                        <div className="absolute top-2 right-2 bg-neutral-900 bg-opacity-75 text-white px-2 py-1 rounded text-xs">
+                          <FontAwesomeIcon
+                            icon={
+                              item.mediaType === "image" ? faImage : faVideo
+                            }
+                            className="mr-1"
+                          />
+                          {item.mediaType}
+                        </div>
+
+                        {/* ELO Badge */}
+                        <div className="absolute bottom-2 left-2 bg-primary-500 text-white px-2 py-1 rounded text-xs font-medium">
+                          ELO: {item.elo}
+                        </div>
+
+                        {/* Generation Params Badge */}
+                        {item.generationParams &&
+                          Object.keys(item.generationParams).length > 0 && (
+                            <div className="absolute bottom-2 right-2 bg-accent-500 text-white px-2 py-1 rounded text-xs">
+                              {Object.keys(item.generationParams).length} params
+                            </div>
+                          )}
+
+                        {/* Prompt Description Tooltip */}
+                        {item.promptDescription && (
+                          <div className="absolute top-2 left-2 bg-secondary-500 text-white px-2 py-1 rounded text-xs max-w-20 truncate">
+                            {item.promptDescription}
+                          </div>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <div className="flex flex-col items-center justify-center py-12">
+                    <div
+                      className="w-24 h-24 border-2 border-dashed border-neutral-300 rounded-full flex items-center justify-center mb-4 cursor-pointer hover:border-primary-400 hover:bg-primary-50 transition-colors"
+                      onClick={() => setShowUpload(true)}
+                    >
+                      <FontAwesomeIcon
+                        icon={faPlus}
+                        className="text-2xl text-neutral-400 hover:text-primary-500"
+                      />
+                    </div>
+                    <h3 className="text-lg font-medium text-neutral-900 mb-2">
+                      Add Media
+                    </h3>
+                    <p className="text-neutral-500 text-center max-w-sm">
+                      Upload your first image or video to get started with your
+                      project gallery.
+                    </p>
+                    <Button
+                      onClick={() => setShowUpload(true)}
+                      className="mt-4 bg-accent-400 hover:bg-accent-500 text-white"
+                    >
+                      <FontAwesomeIcon icon={faPlus} className="mr-2" />
+                      Add Media
+                    </Button>
+                  </div>
+                )}
+              </>
+            )}
+
+            {activeTab === "battle" && <BattleArena projectId={projectId} />}
+
+            {activeTab === "leaderboard" && (
+              <Leaderboard projectId={projectId} />
             )}
           </CardContent>
         </Card>
       </div>
     </div>
+  );
+}
+
+export default function ProjectDetailPage() {
+  return (
+    <ToastProvider>
+      <ProjectDetailPageContent />
+    </ToastProvider>
   );
 }

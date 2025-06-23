@@ -166,7 +166,6 @@ export class MongoDBUserRepository {
   }): Promise<Session> {
     const session = Session.create(sessionData);
     const doc = new SessionModel({
-      _id: session.id,
       userId: session.userId,
       token: session.token,
       expiresAt: session.expiresAt,
@@ -174,8 +173,8 @@ export class MongoDBUserRepository {
       userAgent: session.userAgent,
     });
 
-    await doc.save();
-    return session;
+    const savedDoc = await doc.save();
+    return this.sessionDocumentToDomain(savedDoc);
   }
 
   async findSessionByToken(token: string): Promise<Session | null> {
@@ -205,22 +204,15 @@ export class MongoDBUserRepository {
     email: string;
     hashedPassword: string;
   }): Promise<Account> {
-    const account = Account.createEmailAccount({
-      userId: accountData.userId,
-      email: accountData.email,
-      hashedPassword: accountData.hashedPassword,
-    });
-
     const doc = new AccountModel({
-      _id: account.id,
-      userId: account.userId,
-      accountId: account.accountId,
-      providerId: account.providerId,
-      password: account.password,
+      userId: accountData.userId,
+      accountId: accountData.email,
+      providerId: "credential",
+      password: accountData.hashedPassword,
     });
 
-    await doc.save();
-    return account;
+    const savedDoc = await doc.save();
+    return this.accountDocumentToDomain(savedDoc);
   }
 
   async createOAuthAccount(accountData: {
@@ -232,29 +224,18 @@ export class MongoDBUserRepository {
     idToken?: string;
     scope?: string;
   }): Promise<Account> {
-    const account = Account.createSocialAccount({
+    const doc = new AccountModel({
       userId: accountData.userId,
       accountId: accountData.accountId,
-      providerId: accountData.providerId as any,
+      providerId: accountData.providerId,
       accessToken: accountData.accessToken,
       refreshToken: accountData.refreshToken,
       idToken: accountData.idToken,
       scope: accountData.scope,
     });
 
-    const doc = new AccountModel({
-      _id: account.id,
-      userId: account.userId,
-      accountId: account.accountId,
-      providerId: account.providerId,
-      accessToken: account.accessToken,
-      refreshToken: account.refreshToken,
-      idToken: account.idToken,
-      scope: account.scope,
-    });
-
-    await doc.save();
-    return account;
+    const savedDoc = await doc.save();
+    return this.accountDocumentToDomain(savedDoc);
   }
 
   async findAccountByEmail(email: string): Promise<Account | null> {

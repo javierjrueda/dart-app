@@ -53,18 +53,50 @@ export class CloudflareR2Service {
         },
       });
 
+      console.log(
+        `📤 Attempting R2 upload: ${fileName} (${(file.length / 1024).toFixed(
+          1
+        )}KB)`
+      );
       await this.s3Client.send(command);
 
       // Generate the public URL
       const url = `${process.env.CLOUDFLARE_R2_PUBLIC_URL}/${key}`;
 
+      console.log(`✅ R2 upload successful: ${fileName}`);
       return {
         url,
         key,
       };
     } catch (error) {
-      console.error("Error uploading file to Cloudflare R2:", error);
-      throw new Error("Failed to upload file to cloud storage");
+      console.error("💥 Cloudflare R2 upload error:", error);
+      console.error("📊 Error details:", {
+        fileName,
+        contentType,
+        projectId,
+        fileSize: file.length,
+        bucketName: this.bucketName,
+        errorCode: (error as any)?.Code,
+        errorMessage: (error as any)?.message,
+        statusCode: (error as any)?.$metadata?.httpStatusCode,
+        requestId: (error as any)?.$metadata?.requestId,
+      });
+
+      // Check for specific R2 error codes
+      if (
+        (error as any)?.Code === "TooManyRequests" ||
+        (error as any)?.$metadata?.httpStatusCode === 429
+      ) {
+        throw new Error(
+          "Cloudflare R2 rate limit exceeded. Try again later or contact support to increase limits."
+        );
+      }
+
+      throw new Error(
+        `Failed to upload file to cloud storage: ${
+          (error as any)?.message || error
+        }`
+      );
     }
   }
 

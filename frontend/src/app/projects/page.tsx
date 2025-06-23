@@ -74,7 +74,8 @@ export default function ProjectsPage() {
 
       if (response.ok) {
         const projectsData = await response.json();
-        setProjects(projectsData);
+        // Handle paginated response structure
+        setProjects(projectsData.projects || projectsData);
       } else {
         console.error(
           "Failed to fetch projects",
@@ -123,7 +124,7 @@ export default function ProjectsPage() {
 
       if (response.ok) {
         const newProject = await response.json();
-        setProjects([newProject, ...projects]);
+        setProjects([newProject, ...(projects || [])]);
         setNewProjectName("");
       } else {
         const errorData = await response.json();
@@ -212,7 +213,7 @@ export default function ProjectsPage() {
               <div className="flex items-center justify-center py-12">
                 <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary-500"></div>
               </div>
-            ) : projects.length === 0 ? (
+            ) : !projects || projects.length === 0 ? (
               <div className="text-center py-12">
                 <p className="text-neutral-600">
                   No projects yet. Create your first project above!
@@ -229,8 +230,12 @@ export default function ProjectsPage() {
                     </TableRow>
                   </TableHeader>
                   <TableBody>
-                    {projects.map((project) => (
-                      <TableRow key={project.id}>
+                    {(projects || []).map((project) => (
+                      <TableRow
+                        key={project.id}
+                        className="cursor-pointer hover:bg-neutral-50"
+                        onClick={() => router.push(`/projects/${project.id}`)}
+                      >
                         <TableCell className="font-medium">
                           {project.name}
                         </TableCell>

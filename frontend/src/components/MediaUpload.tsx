@@ -3,6 +3,8 @@
 import { useState, useRef } from "react";
 import { useSession } from "next-auth/react";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import {
   Card,
   CardContent,
@@ -34,6 +36,8 @@ export default function MediaUpload({
   const [uploading, setUploading] = useState(false);
   const [error, setError] = useState("");
   const [dragActive, setDragActive] = useState(false);
+  const [loraTraining, setLoraTraining] = useState("");
+  const [promptDescription, setPromptDescription] = useState("");
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const handleDrag = (e: React.DragEvent) => {
@@ -101,9 +105,13 @@ export default function MediaUpload({
     try {
       const formData = new FormData();
       formData.append("media", file);
+      if (loraTraining) formData.append("loraTraining", loraTraining);
+      if (promptDescription)
+        formData.append("promptDescription", promptDescription);
+      formData.append("extractionMethod", "filename");
 
       const response = await fetch(
-        `${process.env.NEXT_PUBLIC_API_URL}/v1/projects/${projectId}/media/upload`,
+        `http://localhost:3001/api/v1/projects/${projectId}/media/upload`,
         {
           method: "POST",
           body: formData,
@@ -121,6 +129,8 @@ export default function MediaUpload({
       const result = await response.json();
       onUploadSuccess(result.media);
       setFile(null);
+      setLoraTraining("");
+      setPromptDescription("");
 
       if (onClose) {
         onClose();
@@ -208,6 +218,23 @@ export default function MediaUpload({
 
         {/* Error Message */}
         {error && <p className="text-error-600 text-sm">{error}</p>}
+
+        {/* Input Fields */}
+        <div className="space-y-4">
+          <Label htmlFor="loraTraining">Lora Training</Label>
+          <Input
+            id="loraTraining"
+            value={loraTraining}
+            onChange={(e) => setLoraTraining(e.target.value)}
+          />
+
+          <Label htmlFor="promptDescription">Prompt Description</Label>
+          <Input
+            id="promptDescription"
+            value={promptDescription}
+            onChange={(e) => setPromptDescription(e.target.value)}
+          />
+        </div>
 
         {/* Action Buttons */}
         <div className="flex space-x-2">

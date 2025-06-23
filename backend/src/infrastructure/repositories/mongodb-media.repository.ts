@@ -8,6 +8,11 @@ interface MediaDocument extends Document {
   mediaUrl: string;
   mediaType: "image" | "video";
   elo: number;
+  loraTraining?: string;
+  promptDescription?: string;
+  generationParams?: Record<string, any>;
+  extractionMethod: "filename" | "metadata" | "manual";
+  filename?: string;
   createdAt: Date;
   updatedAt: Date;
 }
@@ -18,6 +23,16 @@ const MediaSchema = new Schema(
     mediaUrl: { type: String, required: true },
     mediaType: { type: String, enum: ["image", "video"], required: true },
     elo: { type: Number, default: 1200, required: true },
+    loraTraining: { type: String, required: false },
+    promptDescription: { type: String, required: false },
+    generationParams: { type: Schema.Types.Mixed, required: false },
+    extractionMethod: {
+      type: String,
+      enum: ["filename", "metadata", "manual"],
+      default: "filename",
+      required: true,
+    },
+    filename: { type: String, required: false },
   },
   {
     timestamps: true,
@@ -28,6 +43,7 @@ const MediaSchema = new Schema(
 MediaSchema.index({ projectId: 1 });
 MediaSchema.index({ mediaType: 1 });
 MediaSchema.index({ elo: 1 });
+MediaSchema.index({ projectId: 1, filename: 1 });
 
 const MediaModel = mongoose.model<MediaDocument>("Media", MediaSchema);
 
@@ -39,6 +55,11 @@ export class MongoDBMediaRepository implements MediaRepository {
       doc.mediaUrl,
       doc.mediaType,
       doc.elo,
+      doc.loraTraining,
+      doc.promptDescription,
+      doc.generationParams,
+      doc.extractionMethod,
+      doc.filename,
       doc.createdAt,
       doc.updatedAt
     );
@@ -69,6 +90,11 @@ export class MongoDBMediaRepository implements MediaRepository {
       mediaUrl: media.mediaUrl,
       mediaType: media.mediaType,
       elo: media.elo,
+      loraTraining: media.loraTraining,
+      promptDescription: media.promptDescription,
+      generationParams: media.generationParams,
+      extractionMethod: media.extractionMethod,
+      filename: media.filename,
     });
 
     const savedDoc = await doc.save();
@@ -107,5 +133,47 @@ export class MongoDBMediaRepository implements MediaRepository {
       elo: { $gte: minElo, $lte: maxElo },
     }).sort({ elo: -1 });
     return docs.map((doc) => this.toDomainEntity(doc));
+  }
+
+  async findByPromptDescription(promptDescription: string): Promise<Media[]> {
+    const docs = await MediaModel.find({
+      promptDescription: { $regex: promptDescription, $options: "i" },
+    }).sort({ createdAt: -1 });
+    return docs.map((doc) => this.toDomainEntity(doc));
+  }
+
+  async findByFilename(
+    projectId: string,
+    filename: string
+  ): Promise<Media | null> {
+    const doc = await MediaModel.findOne({
+      projectId,
+      filename: { $regex: new RegExp(`^${filename}$`, "i") }, // Case-insensitive exact match
+    });
+    return doc ? this.toDomainEntity(doc) : null;
+  }
+
+  async findExistingFilenames(projectId: string): Promise<string[]> {
+    console.log(`🔍 Finding existing filenames for project: ${projectId}`);
+    const docs = await MediaModel.find(
+      {
+        projectId,
+        filename: {
+          $exists: true,
+          $ne: null,
+          $not: { $eq: "" },
+        },
+      },
+      { filename: 1, _id: 0 }
+    ).lean(); // Use lean() for better performance
+
+    const filenames = docs
+      .map((doc) => doc.filename)
+      .filter(Boolean) as string[];
+    console.log(
+      `📋 Found ${filenames.length} existing filenames:`,
+      filenames.slice(0, 5)
+    );
+    return filenames;
   }
 }

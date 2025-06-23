@@ -27,6 +27,11 @@ export class MediaUseCases {
     mediaUrl: string;
     mediaType: "image" | "video";
     elo?: number;
+    loraTraining?: string;
+    promptDescription?: string;
+    generationParams?: Record<string, any>;
+    extractionMethod?: "filename" | "metadata" | "manual";
+    filename?: string;
   }): Promise<Media> {
     // Validation
     if (!data.projectId || !data.mediaUrl || !data.mediaType) {
@@ -37,11 +42,19 @@ export class MediaUseCases {
       throw new Error("Media type must be either 'image' or 'video'");
     }
 
+    // Optionally check for duplicate filename if skipDuplicates is enabled
+    // Note: This check can be bypassed during bulk upload if skipDuplicates is false
+
     const media = Media.create({
       projectId: data.projectId,
       mediaUrl: data.mediaUrl,
       mediaType: data.mediaType,
       elo: data.elo || 1200,
+      loraTraining: data.loraTraining,
+      promptDescription: data.promptDescription,
+      generationParams: data.generationParams,
+      extractionMethod: data.extractionMethod || "filename",
+      filename: data.filename,
     });
 
     return await this.mediaRepository.create(media);
@@ -113,7 +126,63 @@ export class MediaUseCases {
     return await this.mediaRepository.findByEloRange(minElo, maxElo);
   }
 
+  async getMediaByPromptDescription(
+    promptDescription: string
+  ): Promise<Media[]> {
+    if (!promptDescription) {
+      throw new Error("Prompt description is required");
+    }
+    return await this.mediaRepository.findByPromptDescription(
+      promptDescription
+    );
+  }
+
+  async updateMediaMetadata(
+    id: string,
+    data: {
+      loraTraining?: string;
+      promptDescription?: string;
+      generationParams?: Record<string, any>;
+    }
+  ): Promise<Media | null> {
+    if (!id) {
+      throw new Error("Media ID is required");
+    }
+
+    const media = await this.mediaRepository.findById(id);
+    if (!media) {
+      throw new Error("Media not found");
+    }
+
+    if (data.loraTraining !== undefined) {
+      media.updateLoraTraining(data.loraTraining);
+    }
+    if (data.promptDescription !== undefined) {
+      media.updatePromptDescription(data.promptDescription);
+    }
+    if (data.generationParams !== undefined) {
+      media.updateGenerationParams(data.generationParams);
+    }
+
+    return await this.mediaRepository.update(id, media);
+  }
+
   private generateId(): string {
     return Date.now().toString(36) + Math.random().toString(36).substr(2);
+  }
+
+  async checkDuplicateFilename(
+    projectId: string,
+    filename: string
+  ): Promise<boolean> {
+    const existingMedia = await this.mediaRepository.findByFilename(
+      projectId,
+      filename
+    );
+    return !!existingMedia;
+  }
+
+  async getExistingFilenames(projectId: string): Promise<string[]> {
+    return await this.mediaRepository.findExistingFilenames(projectId);
   }
 }
