@@ -1,0 +1,229 @@
+---
+description: 
+globs: *.tsx
+alwaysApply: false
+---
+# UI Design Guide
+
+## Key Files to Review
+
+- **Theme Configuration**: `apps/frontend/tailwind.config.js`
+- **CSS Variables**: `apps/frontend/app/globals.css`
+- **App Configuration**: `apps/frontend/config.ts`
+- **Component Examples**: `apps/frontend/app/settings/**/*.tsx`
+
+## Core Principles
+
+- Use theme variables via Tailwind classes (see `globals.css`)
+- Use shadcn components from `components/ui/` directory
+- Mobile-first responsive design
+- Consistent spacing and typography
+- **ALWAYS use the color system defined in CSS variables**
+
+## Color System Rules
+
+### 🎨 MANDATORY: Use Only Defined Colors
+
+**NEVER use hardcoded colors like `#3b82f6`, `rgb(59, 130, 246)`, or named colors like `blue-500`**
+
+#### ✅ CORRECT - Use Tailwind Classes from Color System:
+
+```tsx
+// Primary colors (Navy Blue)
+className = "bg-primary-500 text-white";
+className = "border-primary-200 text-primary-700";
+
+// Secondary colors (Soft Cyan)
+className = "bg-secondary-100 text-primary-500";
+
+// Accent colors (Coral-Red)
+className = "bg-accent-400 text-white hover:bg-accent-500";
+
+// Neutral colors
+className = "bg-neutral-50 text-neutral-500 border-neutral-200";
+
+// Semantic colors
+className = "text-success-600 bg-success-50";
+className = "text-error-600 bg-error-50";
+className = "text-warning-600 bg-warning-50";
+```
+
+#### ✅ CORRECT - Use CSS Variables Directly:
+
+```tsx
+style={{ color: 'var(--color-primary-500)' }}
+style={{ backgroundColor: 'var(--color-neutral-50)' }}
+```
+
+#### ❌ INCORRECT - Never Use These:
+
+```tsx
+// DON'T use hardcoded hex colors
+className="bg-[#3b82f6]"
+style={{ color: '#ee6c4d' }}
+
+// DON'T use Tailwind's default colors
+className="bg-blue-500 text-red-400"
+
+// DON'T use RGB/HSL values
+style={{ color: 'rgb(59, 130, 246)' }}
+```
+
+### Color Usage Guidelines
+
+#### Primary Colors (Navy Blue)
+
+- **Use for**: Main brand elements, primary buttons, navigation, headers
+- **Classes**: `primary-50` through `primary-950`
+- **Main shade**: `primary-500` for most use cases
+
+#### Secondary Colors (Soft Cyan)
+
+- **Use for**: Secondary buttons, highlights, complementary elements
+- **Classes**: `secondary-50` through `secondary-950`
+- **Main shade**: `secondary-100` for backgrounds, `secondary-500` for elements
+
+#### Accent Colors (Coral-Red)
+
+- **Use for**: Call-to-action buttons, important alerts, emphasis
+- **Classes**: `accent-50` through `accent-950`
+- **Main shade**: `accent-400` for most CTAs
+
+#### Neutral Colors
+
+- **Use for**: Text, backgrounds, borders, subtle elements
+- **Classes**: `neutral-50` through `neutral-950`
+- **Text**: `neutral-500` for main text, `neutral-400` for secondary text
+- **Backgrounds**: `neutral-50` for light backgrounds
+
+#### Semantic Colors
+
+- **Success**: `success-*` - Green tones for positive actions
+- **Warning**: `warning-*` - Amber tones for cautions
+- **Error**: `error-*` - Red tones for errors and destructive actions
+
+### Button Color Guidelines
+
+```tsx
+// Primary action buttons
+<button className="btn-primary">Save Changes</button>
+
+// Secondary action buttons
+<button className="btn-secondary">Cancel</button>
+
+// Accent/CTA buttons
+<button className="btn-accent">Get Started</button>
+
+// Ghost buttons
+<button className="btn-ghost">Learn More</button>
+```
+
+## Component Usage Guidelines
+
+- **IMPORTANT**: Always check `apps/frontend/components/` for existing components before creating new ones
+- **PRIORITY**: Use shadcn/ui components whenever possible before creating custom components
+- Reuse existing components when possible to maintain consistency
+- shadcn UI components are in `components/ui/` directory
+- Form components are in `components/forms/` directory
+- Button variants are available in multiple components (Button, ButtonGradient, ButtonLead, etc.)
+
+### shadcn/ui Component Rule
+
+**ALWAYS prefer shadcn/ui components over custom implementations for:**
+
+- Forms (Input, Select, Checkbox, Radio, etc.)
+- Navigation (Tabs, Breadcrumb, Menu)
+- Feedback (Alert, Toast, Dialog, Popover)
+- Data Display (Table, Card, Badge, Avatar)
+- Layout (Separator, Skeleton, ScrollArea)
+
+### Quick shadcn Install
+
+```bash
+# Install any shadcn component
+bunx --bun shadcn@latest add [component-name]
+
+# Examples:
+bunx --bun shadcn@latest add button
+bunx --bun shadcn@latest add input
+bunx --bun shadcn@latest add dialog
+```
+
+**Before creating custom UI**: Check [shadcn/ui docs](https://ui.shadcn.com/docs/components) first.
+
+## Icon Usage Guidelines
+
+### 🎯 MANDATORY: Use Only Font Awesome Icons
+
+**ALWAYS use Font Awesome icons - NO other icon libraries allowed**
+
+#### ✅ CORRECT - Font Awesome Usage:
+
+```tsx
+// Import Font Awesome icons
+import { faUser, faHome, faSearch, faPlus } from '@fortawesome/free-solid-svg-icons'
+import { FontAwesomeIcon } from '@fortawesome/react-fontawesome'
+
+// Use in components
+<FontAwesomeIcon icon={faUser} />
+<FontAwesomeIcon icon={faHome} className="text-primary-500" />
+<FontAwesomeIcon icon={faSearch} size="lg" />
+```
+
+#### ❌ INCORRECT - Never Use These:
+
+```tsx
+// DON'T use Heroicons
+import { UserIcon } from '@heroicons/react/24/outline'
+<UserIcon className="h-5 w-5" />
+
+// DON'T use Lucide icons
+import { User } from 'lucide-react'
+<User size={20} />
+
+// DON'T use React Icons
+import { FiUser } from 'react-icons/fi'
+<FiUser />
+
+// DON'T use custom SVG icons
+<svg>...</svg>
+```
+
+### Font Awesome Categories
+
+- **Solid**: `@fortawesome/free-solid-svg-icons` - Most common icons
+- **Regular**: `@fortawesome/free-regular-svg-icons` - Outlined versions
+- **Brands**: `@fortawesome/free-brands-svg-icons` - Brand/social icons
+
+### Common Icon Replacements
+
+- User: `faUser`
+- Home: `faHome`
+- Search: `faSearch` / `faMagnifyingGlass`
+- Menu: `faBars`
+- Close: `faX` / `faTimes`
+- Arrow: `faArrowRight` / `faChevronRight`
+- Plus: `faPlus`
+- Edit: `faEdit` / `faPenToSquare`
+- Delete: `faTrash`
+- Settings: `faCog` / `faGear`
+
+## Refactoring Rules for Cursor
+
+When you see color usage that doesn't follow these rules:
+
+1. **Replace hardcoded colors** with appropriate Tailwind classes from our color system
+2. **Update old Tailwind colors** (like `blue-500`) with our custom colors (like `primary-500`)
+3. **Ensure semantic correctness** - use `accent-*` for CTAs, `error-*` for errors, etc.
+4. **Maintain contrast ratios** - always pair light backgrounds with dark text and vice versa
+5. **Suggest better alternatives** when you see inconsistent color usage
+
+## CSS Variable Reference
+
+All colors are defined in `apps/frontend/app/globals.css` and can be referenced as:
+
+- `var(--color-primary-500)` for primary navy blue
+- `var(--color-secondary-100)` for secondary cyan
+- `var(--color-accent-400)` for accent coral-red
+- `var(--color-neutral-500)` for main text
+- And many more... (see globals.css for complete list)

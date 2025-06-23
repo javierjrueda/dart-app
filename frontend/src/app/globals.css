@@ -1,0 +1,144 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@import url("https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap");
+
+@layer base {
+  :root {
+    /* ========================================
+     * DREAMSHOT COLOR SYSTEM
+     * ======================================== */
+
+    /* Primary colors (Navy Blue) - Main brand color */
+    --color-primary-50: #e8edf3;
+    --color-primary-100: #bfcddb;
+    --color-primary-200: #95acc2;
+    --color-primary-300: #6b8baa;
+    --color-primary-400: #416a92;
+    --color-primary-500: #011638; /* Main primary navy blue */
+    --color-primary-600: #010f28;
+    --color-primary-700: #010819;
+    --color-primary-800: #00050f;
+    --color-primary-900: #000205;
+    --color-primary-950: #000103;
+
+    /* Secondary colors (Soft Cyan) - Supporting brand color */
+    --color-secondary-50: #f7ffff;
+    --color-secondary-100: #e0fbfc; /* Main secondary cyan */
+    --color-secondary-200: #baf5f7;
+    --color-secondary-300: #95f0f2;
+    --color-secondary-400: #6febed;
+    --color-secondary-500: #4ae5e7;
+    --color-secondary-600: #30cbcd;
+    --color-secondary-700: #24a0a2;
+    --color-secondary-800: #187576;
+    --color-secondary-900: #0c4a4b;
+    --color-secondary-950: #042929;
+
+    /* Accent colors (Coral-Red) - Call-to-action color */
+    --color-accent-50: #fef1ee;
+    --color-accent-100: #fbdad2;
+    --color-accent-200: #f7b2a2;
+    --color-accent-300: #f28b71;
+    --color-accent-400: #ee6c4d; /* Main accent coral-red */
+    --color-accent-500: #ea4720;
+    --color-accent-600: #c93515;
+    --color-accent-700: #a8280f;
+    --color-accent-800: #861c0a;
+    --color-accent-900: #640f06;
+    --color-accent-950: #3e0903;
+
+    /* Neutral colors - Grays for text, backgrounds, borders */
+    --color-neutral-50: #f4f4f4; /* Light gray background */
+    --color-neutral-100: #e9e9e9;
+    --color-neutral-200: #dedede;
+    --color-neutral-300: #c9c9c9;
+    --color-neutral-400: #8f8f8f;
+    --color-neutral-500: #111827; /* Dark text color */
+    --color-neutral-600: #0e1420;
+    --color-neutral-700: #0b101a;
+    --color-neutral-800: #080c13;
+    --color-neutral-900: #05080d;
+    --color-neutral-950: #020306;
+
+    /* Semantic colors */
+    --color-success-50: #f0fdf4;
+    --color-success-100: #dcfce7;
+    --color-success-200: #bbf7d0;
+    --color-success-300: #86efac;
+    --color-success-400: #4ade80;
+    --color-success-500: #22c55e;
+    --color-success-600: #16a34a;
+    --color-success-700: #15803d;
+    --color-success-800: #166534;
+    --color-success-900: #14532d;
+
+    --color-warning-50: #fffbeb;
+    --color-warning-100: #fef3c7;
+    --color-warning-200: #fde68a;
+    --color-warning-300: #fcd34d;
+    --color-warning-400: #fbbf24;
+    --color-warning-500: #f59e0b;
+    --color-warning-600: #d97706;
+    --color-warning-700: #b45309;
+    --color-warning-800: #92400e;
+    --color-warning-900: #78350f;
+
+    --color-error-50: #fef2f2;
+    --color-error-100: #fee2e2;
+    --color-error-200: #fecaca;
+    --color-error-300: #fca5a5;
+    --color-error-400: #f87171;
+    --color-error-500: #ef4444;
+    --color-error-600: #dc2626;
+    --color-error-700: #b91c1c;
+    --color-error-800: #991b1b;
+    --color-error-900: #7f1d1d;
+
+    --foreground-rgb: 0, 0, 0;
+    --background-start-rgb: 214, 219, 220;
+    --background-end-rgb: 255, 255, 255;
+  }
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --foreground-rgb: 255, 255, 255;
+    --background-start-rgb: 0, 0, 0;
+    --background-end-rgb: 0, 0, 0;
+  }
+}
+
+body {
+  color: rgb(var(--foreground-rgb));
+  background: linear-gradient(
+      to bottom,
+      transparent,
+      rgb(var(--background-end-rgb))
+    )
+    rgb(var(--background-start-rgb));
+  font-family: "Inter", sans-serif;
+}
+
+@layer components {
+  .btn-primary {
+    @apply bg-primary-500 hover:bg-primary-600 text-white font-medium py-2 px-4 rounded-lg transition-colors duration-200 shadow-sm hover:shadow-md;
+  }
+
+  .btn-secondary {
+    @apply bg-secondary-100 hover:bg-secondary-200 text-primary-700 font-medium py-2 px-4 rounded-lg transition-colors duration-200 border border-secondary-200 hover:border-secondary-300;
+  }
+
+  .btn-accent {
+    @apply bg-accent-400 hover:bg-accent-500 text-white font-medium py-2 px-4 rounded-lg transition-colors duration-200 shadow-sm hover:shadow-md;
+  }
+
+  .btn-ghost {
+    @apply bg-transparent hover:bg-neutral-50 text-neutral-700 font-medium py-2 px-4 rounded-lg transition-colors duration-200 border border-neutral-200 hover:border-neutral-300;
+  }
+
+  .card {
+    @apply bg-white rounded-lg shadow-md border border-neutral-200 p-6 hover:shadow-lg transition-shadow duration-200;
+  }
+}
