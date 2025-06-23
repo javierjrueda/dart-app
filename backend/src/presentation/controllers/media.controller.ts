@@ -118,6 +118,8 @@ export class MediaController {
   async getProjectMedia(req: Request, res: Response): Promise<Response> {
     try {
       const { projectId } = req.params;
+      const page = parseInt(req.query.page as string) || 1;
+      const limit = parseInt(req.query.limit as string) || 50;
 
       if (!projectId) {
         return res.status(400).json({ error: "Project ID is required" });
@@ -125,9 +127,22 @@ export class MediaController {
 
       const media = await this.mediaUseCases.getMediaByProjectId(projectId);
 
+      // Sort by createdAt descending (newest first)
+      const sortedMedia = media.sort(
+        (a, b) => b.createdAt.getTime() - a.createdAt.getTime()
+      );
+
+      // Apply pagination
+      const startIndex = (page - 1) * limit;
+      const endIndex = startIndex + limit;
+      const paginatedMedia = sortedMedia.slice(startIndex, endIndex);
+
       return res.json({
-        media: media.map((m) => m.toJSON()),
-        count: media.length,
+        media: paginatedMedia.map((m) => m.toJSON()),
+        total: media.length,
+        page,
+        limit,
+        totalPages: Math.ceil(media.length / limit),
       });
     } catch (error) {
       console.error("Get media error:", error);
@@ -160,6 +175,58 @@ export class MediaController {
           error instanceof Error
             ? error.message
             : "Failed to get existing filenames",
+      });
+    }
+  }
+
+  async getUniqueGenerationParams(
+    req: Request,
+    res: Response
+  ): Promise<Response> {
+    try {
+      const { projectId } = req.params;
+
+      if (!projectId) {
+        return res.status(400).json({ error: "Project ID is required" });
+      }
+
+      const params = await this.mediaUseCases.getUniqueGenerationParams(
+        projectId
+      );
+
+      return res.json({
+        params,
+        count: params.length,
+      });
+    } catch (error) {
+      console.error("Get unique generation params error:", error);
+      return res.status(500).json({
+        error:
+          error instanceof Error
+            ? error.message
+            : "Failed to get generation params",
+      });
+    }
+  }
+
+  async getProjectAnalytics(req: Request, res: Response): Promise<Response> {
+    try {
+      const { projectId } = req.params;
+
+      if (!projectId) {
+        return res.status(400).json({ error: "Project ID is required" });
+      }
+
+      const analytics = await this.mediaUseCases.getProjectAnalytics(projectId);
+
+      return res.json(analytics);
+    } catch (error) {
+      console.error("Get project analytics error:", error);
+      return res.status(500).json({
+        error:
+          error instanceof Error
+            ? error.message
+            : "Failed to get project analytics",
       });
     }
   }
@@ -242,6 +309,70 @@ export class MediaController {
       console.error("Update ELO error:", error);
       return res.status(500).json({
         error: error instanceof Error ? error.message : "Failed to update ELO",
+      });
+    }
+  }
+
+  async updateQuality(req: Request, res: Response): Promise<Response> {
+    try {
+      const { id } = req.params;
+      const { quality } = req.body;
+
+      if (quality !== -1 && quality !== 0 && quality !== 1) {
+        return res.status(400).json({ error: "Quality must be -1, 0, or 1" });
+      }
+
+      const media = await this.mediaUseCases.updateQuality(id, quality);
+
+      if (!media) {
+        return res.status(404).json({ error: "Media not found" });
+      }
+
+      return res.json({
+        message: "Quality updated successfully",
+        media: media.toJSON(),
+      });
+    } catch (error) {
+      console.error("Update quality error:", error);
+      return res.status(500).json({
+        error:
+          error instanceof Error ? error.message : "Failed to update quality",
+      });
+    }
+  }
+
+  async bulkUpdateQuality(req: Request, res: Response): Promise<Response> {
+    try {
+      const { mediaIds, quality } = req.body;
+
+      if (!Array.isArray(mediaIds) || mediaIds.length === 0) {
+        return res
+          .status(400)
+          .json({ error: "mediaIds must be a non-empty array" });
+      }
+
+      if (quality !== -1 && quality !== 0 && quality !== 1) {
+        return res.status(400).json({ error: "Quality must be -1, 0, or 1" });
+      }
+
+      const results = await this.mediaUseCases.bulkUpdateQuality(
+        mediaIds,
+        quality
+      );
+
+      return res.json({
+        message: "Bulk quality update completed",
+        updated: results.updated,
+        failed: results.failed,
+        total: mediaIds.length,
+      });
+    } catch (error) {
+      console.error("Bulk update quality error:", error);
+      return res.status(500).json({
+        error:
+          error instanceof Error
+            ? error.message
+            : "Failed to bulk update quality",
       });
     }
   }

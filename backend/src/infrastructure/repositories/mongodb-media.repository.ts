@@ -8,6 +8,7 @@ interface MediaDocument extends Document {
   mediaUrl: string;
   mediaType: "image" | "video";
   elo: number;
+  quality: number; // -1 (bad), 0 (unrated), 1 (good)
   loraTraining?: string;
   promptDescription?: string;
   generationParams?: Record<string, any>;
@@ -23,6 +24,7 @@ const MediaSchema = new Schema(
     mediaUrl: { type: String, required: true },
     mediaType: { type: String, enum: ["image", "video"], required: true },
     elo: { type: Number, default: 1200, required: true },
+    quality: { type: Number, default: 0, required: true, enum: [-1, 0, 1] },
     loraTraining: { type: String, required: false },
     promptDescription: { type: String, required: false },
     generationParams: { type: Schema.Types.Mixed, required: false },
@@ -44,6 +46,7 @@ MediaSchema.index({ projectId: 1 });
 MediaSchema.index({ mediaType: 1 });
 MediaSchema.index({ elo: 1 });
 MediaSchema.index({ projectId: 1, filename: 1 });
+MediaSchema.index({ quality: 1 }); // Index for quality filtering
 
 const MediaModel = mongoose.model<MediaDocument>("Media", MediaSchema);
 
@@ -55,6 +58,7 @@ export class MongoDBMediaRepository implements MediaRepository {
       doc.mediaUrl,
       doc.mediaType,
       doc.elo,
+      doc.quality || 0, // Default to unrated if not present
       doc.loraTraining,
       doc.promptDescription,
       doc.generationParams,
@@ -90,6 +94,7 @@ export class MongoDBMediaRepository implements MediaRepository {
       mediaUrl: media.mediaUrl,
       mediaType: media.mediaType,
       elo: media.elo,
+      quality: media.quality,
       loraTraining: media.loraTraining,
       promptDescription: media.promptDescription,
       generationParams: media.generationParams,

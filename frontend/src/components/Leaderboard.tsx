@@ -219,7 +219,7 @@ export default function Leaderboard({ projectId }: LeaderboardProps) {
                   <img
                     src={entry.media.mediaUrl}
                     alt={`Rank ${entry.rank}`}
-                    className="w-16 h-16 object-cover rounded-md border border-neutral-200"
+                    className="w-24 h-24 object-cover rounded-md border border-neutral-200"
                   />
                 </div>
 
@@ -244,13 +244,15 @@ export default function Leaderboard({ projectId }: LeaderboardProps) {
 
                   {entry.media.generationParams && (
                     <div className="mt-2 text-xs text-neutral-400">
-                      {Object.entries(entry.media.generationParams)
-                        .slice(0, 2)
-                        .map(([key, value]) => (
-                          <span key={key} className="mr-3">
-                            {key}: {String(value)}
-                          </span>
-                        ))}
+                      <div className="flex flex-wrap gap-x-3 gap-y-1">
+                        {Object.entries(entry.media.generationParams).map(
+                          ([key, value]) => (
+                            <span key={key} className="font-mono">
+                              {key}: {String(value)}
+                            </span>
+                          )
+                        )}
+                      </div>
                     </div>
                   )}
                 </div>

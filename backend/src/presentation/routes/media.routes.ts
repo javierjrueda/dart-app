@@ -69,6 +69,16 @@ router.delete("/media/:id", mediaController.deleteMedia.bind(mediaController));
 router.patch("/media/:id/elo", mediaController.updateElo.bind(mediaController));
 
 router.patch(
+  "/media/:id/quality",
+  mediaController.updateQuality.bind(mediaController)
+);
+
+router.patch(
+  "/media/bulk-quality",
+  mediaController.bulkUpdateQuality.bind(mediaController)
+);
+
+router.patch(
   "/media/:id/metadata",
   mediaController.updateMediaMetadata.bind(mediaController)
 );
@@ -86,6 +96,18 @@ router.get("/media", mediaController.getAllMedia.bind(mediaController));
 router.get(
   "/projects/:projectId/media/filenames",
   mediaController.getExistingFilenames.bind(mediaController)
+);
+
+// Get unique generation parameters for filtering
+router.get(
+  "/projects/:projectId/media/generation-params",
+  mediaController.getUniqueGenerationParams.bind(mediaController)
+);
+
+// Get project analytics
+router.get(
+  "/projects/:projectId/analytics",
+  mediaController.getProjectAnalytics.bind(mediaController)
 );
 
 export { router as mediaRoutes };

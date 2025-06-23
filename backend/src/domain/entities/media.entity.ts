@@ -4,6 +4,7 @@ export interface MediaProfile {
   mediaUrl: string;
   mediaType: "image" | "video";
   elo: number;
+  quality?: number; // -1 (bad), 0 (unrated), 1 (good)
   loraTraining?: string;
   promptDescription?: string;
   generationParams?: Record<string, any>;
@@ -32,6 +33,7 @@ export class Media {
     public mediaUrl: string,
     public mediaType: "image" | "video",
     public elo: number = 1200,
+    public quality: number = 0, // Default to unrated
     public loraTraining?: string,
     public promptDescription?: string,
     public generationParams?: Record<string, any>,
@@ -46,6 +48,7 @@ export class Media {
     mediaUrl: string;
     mediaType: "image" | "video";
     elo?: number;
+    quality?: number;
     loraTraining?: string;
     promptDescription?: string;
     generationParams?: Record<string, any>;
@@ -58,6 +61,7 @@ export class Media {
       data.mediaUrl,
       data.mediaType,
       data.elo || 1200,
+      data.quality || 0,
       data.loraTraining,
       data.promptDescription,
       data.generationParams,
@@ -133,6 +137,14 @@ export class Media {
     this.updatedAt = new Date();
   }
 
+  updateQuality(quality: number): void {
+    if (quality !== -1 && quality !== 0 && quality !== 1) {
+      throw new Error("Quality must be -1, 0, or 1");
+    }
+    this.quality = quality;
+    this.updatedAt = new Date();
+  }
+
   private static generateId(): string {
     return Date.now().toString(36) + Math.random().toString(36).substr(2);
   }
@@ -144,6 +156,7 @@ export class Media {
       mediaUrl: this.mediaUrl,
       mediaType: this.mediaType,
       elo: this.elo,
+      quality: this.quality,
       loraTraining: this.loraTraining,
       promptDescription: this.promptDescription,
       generationParams: this.generationParams,

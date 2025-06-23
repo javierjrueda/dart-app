@@ -22,12 +22,15 @@ export class BattleUseCases {
 
     const mediaList = await this.mediaRepository.findByProjectId(projectId);
 
-    if (mediaList.length < 2) {
-      return null; // Not enough media for a battle
+    // Filter only good quality images (quality === 1)
+    const goodQualityMedia = mediaList.filter((media) => media.quality === 1);
+
+    if (goodQualityMedia.length < 2) {
+      return null; // Not enough good quality media for a battle
     }
 
     // Randomly select two different media items
-    const shuffled = [...mediaList].sort(() => Math.random() - 0.5);
+    const shuffled = [...goodQualityMedia].sort(() => Math.random() - 0.5);
     const mediaA = shuffled[0];
     const mediaB = shuffled[1];
 
@@ -196,6 +199,9 @@ export class BattleUseCases {
       this.battleRepository.findByProjectId(projectId),
     ]);
 
+    // Filter only good quality images (quality === 1)
+    const goodQualityMedia = mediaList.filter((media) => media.quality === 1);
+
     // Calculate battle statistics for each media
     const mediaStats = new Map<
       string,
@@ -230,7 +236,7 @@ export class BattleUseCases {
     });
 
     // Sort by ELO and add rank
-    const leaderboard = mediaList
+    const leaderboard = goodQualityMedia
       .sort((a, b) => b.elo - a.elo)
       .slice(0, limit)
       .map((media, index) => {

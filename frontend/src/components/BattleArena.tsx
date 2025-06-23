@@ -26,6 +26,7 @@ interface Media {
   mediaUrl: string;
   mediaType: "image" | "video";
   elo: number;
+  quality?: number; // Quality rating: -1 (bad), 0 (unrated), 1 (good)
   loraTraining?: string;
   promptDescription?: string;
   generationParams?: Record<string, any>;
@@ -71,7 +72,9 @@ export default function BattleArena({ projectId }: BattleArenaProps) {
         const data = await response.json();
         setBattlePair(data);
       } else if (response.status === 404) {
-        setError("Not enough images for battle (minimum 2 required)");
+        setError(
+          "Not enough 'Good' quality images for battle (minimum 2 required). Please rate some images as 'Good' in the Gallery first."
+        );
       } else {
         setError("Failed to load battle pair");
       }
@@ -295,7 +298,8 @@ export default function BattleArena({ projectId }: BattleArenaProps) {
         <CardContent>
           <div className="text-center py-12">
             <p className="text-neutral-600 mb-4">
-              Upload more images to start battles
+              You need at least 2 images rated as "Good" to start battles. Go to
+              the Gallery tab and rate some images first.
             </p>
             <Button
               onClick={fetchBattlePair}
@@ -317,8 +321,8 @@ export default function BattleArena({ projectId }: BattleArenaProps) {
           <div>
             <CardTitle className="text-primary-700">Battle Arena</CardTitle>
             <CardDescription className="text-neutral-500">
-              Choose the better image or skip • Use keys 1, 2, 3 • Apply
-              penalties with keys 4, 5, 6
+              Only comparing "Good" quality images • Use keys 1, 2, 3 to choose
+              • Apply penalties with keys 4, 5, 6
             </CardDescription>
           </div>
           <div className="text-right">
@@ -337,7 +341,7 @@ export default function BattleArena({ projectId }: BattleArenaProps) {
               <img
                 src={battlePair.mediaA.mediaUrl}
                 alt="Option A"
-                className="w-full max-h-96 object-contain rounded-lg border-2 border-neutral-200 hover:border-primary-300 transition-colors cursor-pointer"
+                className="w-full min-w-[40vw] max-h-[70vh] object-contain rounded-lg border-2 border-neutral-200 hover:border-primary-300 transition-colors cursor-pointer"
                 onClick={() => conductBattle("A")}
               />
               <div className="absolute inset-0 bg-black bg-opacity-0 hover:bg-opacity-20 transition-all rounded-lg flex items-center justify-center">
@@ -397,7 +401,7 @@ export default function BattleArena({ projectId }: BattleArenaProps) {
               <img
                 src={battlePair.mediaB.mediaUrl}
                 alt="Option B"
-                className="w-full max-h-96 object-contain rounded-lg border-2 border-neutral-200 hover:border-primary-300 transition-colors cursor-pointer"
+                className="w-full min-w-[40vw] max-h-[70vh] object-contain rounded-lg border-2 border-neutral-200 hover:border-primary-300 transition-colors cursor-pointer"
                 onClick={() => conductBattle("B")}
               />
               <div className="absolute inset-0 bg-black bg-opacity-0 hover:bg-opacity-20 transition-all rounded-lg flex items-center justify-center">
@@ -446,7 +450,7 @@ export default function BattleArena({ projectId }: BattleArenaProps) {
         </div>
 
         {/* VS Divider for desktop */}
-        <div className="hidden lg:block absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 bg-white border-2 border-neutral-200 rounded-full w-16 h-16 flex items-center justify-center z-10">
+        <div className="hidden lg:flex absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 bg-white border-2 border-neutral-200 rounded-full w-16 h-16 items-center justify-center z-10">
           <span className="text-neutral-600 font-bold text-xl">VS</span>
         </div>
 
