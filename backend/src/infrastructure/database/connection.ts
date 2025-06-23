@@ -10,8 +10,6 @@ export const connectDatabase = async (): Promise<void> => {
 
     await mongoose.connect(mongoUri);
 
-    console.log("✅ MongoDB Atlas connected successfully");
-
     // Handle connection events
     mongoose.connection.on("error", (error) => {
       console.error("❌ MongoDB connection error:", error);

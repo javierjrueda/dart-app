@@ -132,18 +132,11 @@ export default function Dashboard() {
           <h1 className="text-3xl font-bold text-neutral-900 mb-4">
             Welcome to your Dashboard, {session.user?.name}!
           </h1>
-          <p className="text-neutral-600">
-            Here are your recent projects. Click on any project to view details.
-          </p>
         </div>
 
         <Card>
           <CardHeader>
             <CardTitle>Recent Projects</CardTitle>
-            <CardDescription>
-              Your last {projectsPerPage} projects. Click on a project to view
-              details.
-            </CardDescription>
           </CardHeader>
           <CardContent>
             {loading ? (
