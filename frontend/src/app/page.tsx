@@ -1,3 +1,8 @@
+"use client";
+
+import { useSession } from "next-auth/react";
+import { useEffect } from "react";
+import { useRouter } from "next/navigation";
 import Header from "@/components/Header";
 import {
   faCamera,
@@ -10,6 +15,35 @@ import {
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 
 export default function Home() {
+  const { data: session, status } = useSession();
+  const router = useRouter();
+
+  useEffect(() => {
+    if (status === "loading") return; // Still loading
+
+    if (session) {
+      router.push("/dashboard");
+    }
+  }, [session, status, router]);
+
+  // Show loading while checking authentication
+  if (status === "loading") {
+    return (
+      <main className="min-h-screen flex items-center justify-center">
+        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary-500"></div>
+      </main>
+    );
+  }
+
+  // Redirect authenticated users (this prevents flash of content)
+  if (session) {
+    return (
+      <main className="min-h-screen flex items-center justify-center">
+        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary-500"></div>
+      </main>
+    );
+  }
+
   return (
     <main className="min-h-screen">
       <Header />

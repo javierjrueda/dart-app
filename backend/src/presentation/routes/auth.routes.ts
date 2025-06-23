@@ -28,7 +28,7 @@ router.post("/signup", async (req, res) => {
     const user = await userRepo.createUser({
       name,
       email,
-      role: "user"
+      role: "user",
     });
 
     // Hash password and create account
@@ -36,7 +36,7 @@ router.post("/signup", async (req, res) => {
     await userRepo.createAccount({
       userId: user.id,
       email,
-      hashedPassword
+      hashedPassword,
     });
 
     // Create token
@@ -45,12 +45,12 @@ router.post("/signup", async (req, res) => {
       email: user.email,
       name: user.name,
       role: user.role,
-      image: user.image
+      image: user.image,
     });
 
     return res.json({
       user: user.toProfile(),
-      token
+      token,
     });
   } catch (error) {
     console.error("Signup error:", error);
@@ -78,13 +78,18 @@ router.post("/signin", async (req, res) => {
 
     // Check password
     const accounts = await userRepo.findAccountsByUserId(user.id);
-    const credentialAccount = accounts.find(acc => acc.providerId === "credential");
-    
+    const credentialAccount = accounts.find(
+      (acc) => acc.providerId === "credential"
+    );
+
     if (!credentialAccount || !credentialAccount.password) {
       return res.status(401).json({ error: "Invalid credentials" });
     }
 
-    const isPasswordValid = await bcrypt.compare(password, credentialAccount.password);
+    const isPasswordValid = await bcrypt.compare(
+      password,
+      credentialAccount.password
+    );
     if (!isPasswordValid) {
       return res.status(401).json({ error: "Invalid credentials" });
     }
@@ -95,12 +100,12 @@ router.post("/signin", async (req, res) => {
       email: user.email,
       name: user.name,
       role: user.role,
-      image: user.image
+      image: user.image,
     });
 
     return res.json({
       user: user.toProfile(),
-      token
+      token,
     });
   } catch (error) {
     console.error("Signin error:", error);
@@ -118,7 +123,7 @@ router.get("/session", async (req, res) => {
 
     const token = authHeader.substring(7);
     const decoded = await verifyAuth(token);
-    
+
     if (!decoded) {
       return res.status(401).json({ error: "Invalid token" });
     }
@@ -126,14 +131,14 @@ router.get("/session", async (req, res) => {
     await connectDatabase();
     const userRepo = new MongoDBUserRepository();
     const user = await userRepo.findUserById(decoded.id);
-    
+
     if (!user) {
       return res.status(404).json({ error: "User not found" });
     }
 
     return res.json({
       user: user.toProfile(),
-      expires: new Date(decoded.exp * 1000).toISOString()
+      expires: new Date(decoded.exp * 1000).toISOString(),
     });
   } catch (error) {
     console.error("Session error:", error);
@@ -144,6 +149,80 @@ router.get("/session", async (req, res) => {
 // Sign out endpoint (client-side token removal)
 router.post("/signout", (req, res) => {
   return res.json({ success: true });
+});
+
+// OAuth sync endpoint for NextAuth
+router.post("/oauth-sync", async (req, res) => {
+  try {
+    const { provider, email, name, image } = req.body;
+
+    if (!provider || !email) {
+      return res.status(400).json({ error: "Missing required fields" });
+    }
+
+    await connectDatabase();
+    const userRepo = new MongoDBUserRepository();
+
+    // Check if user already exists
+    let user = await userRepo.findUserByEmail(email);
+
+    if (!user) {
+      // Create new user
+      user = await userRepo.createUser({
+        name: name || "",
+        email,
+        role: "user",
+        image: image || null,
+      });
+
+      // Create OAuth account
+      await userRepo.createOAuthAccount({
+        userId: user.id,
+        accountId: email, // Use email as provider account ID for OAuth
+        providerId: provider,
+      });
+    } else {
+      // Update user info if needed
+      if (name && user.name !== name) {
+        user.name = name;
+        await userRepo.updateUser(user.id, { name });
+      }
+      if (image && user.image !== image) {
+        user.image = image;
+        await userRepo.updateUser(user.id, { image });
+      }
+
+      // Check if OAuth account exists for this user/provider combination
+      const accounts = await userRepo.findAccountsByUserId(user.id);
+      const oauthAccount = accounts.find((acc) => acc.providerId === provider);
+
+      if (!oauthAccount) {
+        // Create OAuth account for existing user
+        await userRepo.createOAuthAccount({
+          userId: user.id,
+          accountId: email,
+          providerId: provider,
+        });
+      }
+    }
+
+    // Create token
+    const token = await createAuthToken({
+      id: user.id,
+      email: user.email,
+      name: user.name,
+      role: user.role,
+      image: user.image,
+    });
+
+    return res.json({
+      user: user.toProfile(),
+      token,
+    });
+  } catch (error) {
+    console.error("OAuth sync error:", error);
+    return res.status(500).json({ error: "Internal server error" });
+  }
 });
 
 export { router as authRoutes };

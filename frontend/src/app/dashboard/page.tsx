@@ -1,24 +1,44 @@
 "use client";
 
 import { useSession } from "next-auth/react";
-import { authClient } from "@/lib/auth-client";
 import { useRouter } from "next/navigation";
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import Header from "@/components/Header";
-import Avatar from "@/components/Avatar";
 import {
-  faCamera,
-  faEdit,
-  faChartBar,
-  faUser,
-  faSignOutAlt,
-} from "@fortawesome/free-solid-svg-icons";
-import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table";
+import { Button } from "@/components/ui/button";
+
+interface Project {
+  id: string;
+  name: string;
+  userId: string;
+  createdAt: string;
+  updatedAt: string;
+}
 
 export default function Dashboard() {
   const { data: session, status } = useSession();
   const router = useRouter();
   const isPending = status === "loading";
+  const [projects, setProjects] = useState<Project[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState("");
+  const [currentPage, setCurrentPage] = useState(1);
+  const [totalProjects, setTotalProjects] = useState(0);
+  const projectsPerPage = 10;
 
   useEffect(() => {
     if (!isPending && !session) {
@@ -26,12 +46,70 @@ export default function Dashboard() {
     }
   }, [session, isPending, router]);
 
-  const handleSignOut = async () => {
-    try {
-      await authClient.signOut();
-    } catch (error) {
-      console.error("Sign out error:", error);
+  useEffect(() => {
+    if (session) {
+      fetchProjects();
     }
+  }, [session, currentPage]);
+
+  const fetchProjects = async () => {
+    try {
+      setLoading(true);
+      setError("");
+      const accessToken = (session as any)?.accessToken;
+
+      if (!accessToken) {
+        setError("Authentication error: No access token found");
+        return;
+      }
+
+      const response = await fetch(
+        `http://localhost:3001/api/v1/projects?page=${currentPage}&limit=${projectsPerPage}`,
+        {
+          headers: {
+            Authorization: `Bearer ${accessToken}`,
+          },
+        }
+      );
+
+      if (response.ok) {
+        const data = await response.json();
+        // Handle paginated response format
+        if (data.projects && Array.isArray(data.projects)) {
+          setProjects(data.projects);
+          setTotalProjects(data.total || data.projects.length);
+        } else if (Array.isArray(data)) {
+          // Fallback for non-paginated response
+          setProjects(data);
+          setTotalProjects(data.length);
+        } else {
+          setProjects([]);
+          setTotalProjects(0);
+        }
+      } else {
+        console.error("Failed to fetch projects", response.status);
+        if (response.status === 401) {
+          setError("Authentication error: Please sign out and sign in again");
+        } else {
+          setError("Failed to load projects");
+        }
+      }
+    } catch (error) {
+      console.error("Error fetching projects:", error);
+      setError("Failed to load projects");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const totalPages = Math.ceil(totalProjects / projectsPerPage);
+
+  const handleProjectClick = (projectId: string) => {
+    router.push(`/projects/${projectId}`);
+  };
+
+  const goToPage = (page: number) => {
+    setCurrentPage(page);
   };
 
   if (isPending) {
@@ -49,152 +127,161 @@ export default function Dashboard() {
   return (
     <div className="min-h-screen bg-neutral-50">
       <Header />
-
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        {/* Welcome Header */}
-        <div className="bg-white rounded-2xl shadow-lg border border-neutral-200 p-6 mb-8">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center space-x-4">
-              <Avatar
-                src={session.user?.image}
-                name={session.user?.name}
-                alt={session.user?.name || "User"}
-                size="lg"
-              />
-              <div>
-                <h1 className="text-3xl font-bold text-neutral-900">
-                  Welcome back, {session.user?.name}!
-                </h1>
-                <p className="text-neutral-600 mt-1">{session.user?.email}</p>
-              </div>
-            </div>
-            <button
-              onClick={handleSignOut}
-              className="btn-ghost flex items-center space-x-2"
-            >
-              <FontAwesomeIcon icon={faSignOutAlt} className="h-4 w-4" />
-              <span>Sign Out</span>
-            </button>
-          </div>
+        <div className="mb-8">
+          <h1 className="text-3xl font-bold text-neutral-900 mb-4">
+            Welcome to your Dashboard, {session.user?.name}!
+          </h1>
+          <p className="text-neutral-600">
+            Here are your recent projects. Click on any project to view details.
+          </p>
         </div>
 
-        {/* Dashboard Content */}
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-          {/* Dreamshots Card */}
-          <div className="card hover:border-primary-300 transition-colors duration-200">
-            <div className="flex items-center justify-between mb-4">
-              <h3 className="text-xl font-semibold text-neutral-900">
-                Dreamshots
-              </h3>
-              <div className="p-3 bg-primary-100 rounded-lg">
-                <FontAwesomeIcon
-                  icon={faCamera}
-                  className="w-6 h-6 text-primary-600"
-                />
+        <Card>
+          <CardHeader>
+            <CardTitle>Recent Projects</CardTitle>
+            <CardDescription>
+              Your last {projectsPerPage} projects. Click on a project to view
+              details.
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            {loading ? (
+              <div className="flex items-center justify-center py-8">
+                <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary-500"></div>
               </div>
-            </div>
-            <p className="text-neutral-600 mb-6">
-              Manage and annotate your dreamshots
-            </p>
-            <button className="btn-primary w-full">View Dreamshots</button>
-          </div>
-
-          {/* Annotations Card */}
-          <div className="card hover:border-secondary-300 transition-colors duration-200">
-            <div className="flex items-center justify-between mb-4">
-              <h3 className="text-xl font-semibold text-neutral-900">
-                Annotations
-              </h3>
-              <div className="p-3 bg-secondary-100 rounded-lg">
-                <FontAwesomeIcon
-                  icon={faEdit}
-                  className="w-6 h-6 text-secondary-600"
-                />
+            ) : error ? (
+              <div className="text-center py-8">
+                <p className="text-red-600 mb-4">{error}</p>
+                <Button onClick={fetchProjects} variant="outline">
+                  Try Again
+                </Button>
               </div>
-            </div>
-            <p className="text-neutral-600 mb-6">
-              Review and manage annotations
-            </p>
-            <button className="btn-secondary w-full">View Annotations</button>
-          </div>
-
-          {/* Rankings Card */}
-          <div className="card hover:border-accent-300 transition-colors duration-200">
-            <div className="flex items-center justify-between mb-4">
-              <h3 className="text-xl font-semibold text-neutral-900">
-                Rankings
-              </h3>
-              <div className="p-3 bg-accent-100 rounded-lg">
-                <FontAwesomeIcon
-                  icon={faChartBar}
-                  className="w-6 h-6 text-accent-600"
-                />
+            ) : projects.length === 0 ? (
+              <div className="text-center py-8">
+                <p className="text-neutral-600 mb-4">No projects found.</p>
+                <Button onClick={() => router.push("/projects")}>
+                  Create Your First Project
+                </Button>
               </div>
-            </div>
-            <p className="text-neutral-600 mb-6">View ranking statistics</p>
-            <button className="btn-accent w-full">View Rankings</button>
-          </div>
-        </div>
+            ) : (
+              <>
+                <div className="w-full">
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead className="w-[300px]">
+                          Project Name
+                        </TableHead>
+                        <TableHead>Created</TableHead>
+                        <TableHead>Last Updated</TableHead>
+                        <TableHead className="text-right">Actions</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {projects.map((project) => (
+                        <TableRow
+                          key={project.id}
+                          className="cursor-pointer hover:bg-neutral-50 transition-colors"
+                          onClick={() => handleProjectClick(project.id)}
+                        >
+                          <TableCell className="font-medium">
+                            {project.name}
+                          </TableCell>
+                          <TableCell>
+                            {new Date(project.createdAt).toLocaleDateString()}
+                          </TableCell>
+                          <TableCell>
+                            {new Date(project.updatedAt).toLocaleDateString()}
+                          </TableCell>
+                          <TableCell className="text-right">
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                handleProjectClick(project.id);
+                              }}
+                            >
+                              View →
+                            </Button>
+                          </TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                </div>
 
-        {/* User Info */}
-        <div className="mt-8 bg-white rounded-2xl shadow-lg border border-neutral-200 p-6">
-          <h3 className="text-xl font-semibold text-neutral-900 mb-6">
-            Account Information
-          </h3>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            <div className="space-y-1">
-              <label className="block text-sm font-medium text-neutral-700">
-                Full Name
-              </label>
-              <p className="text-neutral-900 bg-neutral-50 px-3 py-2 rounded-md border border-neutral-200">
-                {session.user?.name || "Not provided"}
-              </p>
-            </div>
-            <div className="space-y-1">
-              <label className="block text-sm font-medium text-neutral-700">
-                Email Address
-              </label>
-              <p className="text-neutral-900 bg-neutral-50 px-3 py-2 rounded-md border border-neutral-200">
-                {session.user?.email || "Not provided"}
-              </p>
-            </div>
-            <div className="space-y-1">
-              <label className="block text-sm font-medium text-neutral-700">
-                User ID
-              </label>
-              <p className="text-neutral-900 bg-neutral-50 px-3 py-2 rounded-md border border-neutral-200 font-mono text-sm">
-                {(session.user as any)?.id || "Not available"}
-              </p>
-            </div>
-            <div className="space-y-1">
-              <label className="block text-sm font-medium text-neutral-700">
-                Account Role
-              </label>
-              <p className="text-neutral-900 bg-neutral-50 px-3 py-2 rounded-md border border-neutral-200 capitalize">
-                {(session.user as any)?.role || "User"}
-              </p>
-            </div>
-          </div>
-        </div>
+                {/* Pagination */}
+                {totalPages > 1 && (
+                  <div className="flex items-center justify-between mt-6">
+                    <div className="text-sm text-neutral-600">
+                      Showing {(currentPage - 1) * projectsPerPage + 1} to{" "}
+                      {Math.min(currentPage * projectsPerPage, totalProjects)}{" "}
+                      of {totalProjects} projects
+                    </div>
+                    <div className="flex items-center space-x-2">
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => goToPage(currentPage - 1)}
+                        disabled={currentPage === 1}
+                      >
+                        Previous
+                      </Button>
 
-        {/* Quick Stats */}
-        <div className="mt-8 grid grid-cols-1 md:grid-cols-4 gap-6">
-          <div className="bg-white rounded-xl shadow-lg border border-neutral-200 p-6 text-center">
-            <div className="text-3xl font-bold text-primary-500 mb-2">0</div>
-            <div className="text-neutral-600">Dreamshots</div>
-          </div>
-          <div className="bg-white rounded-xl shadow-lg border border-neutral-200 p-6 text-center">
-            <div className="text-3xl font-bold text-secondary-500 mb-2">0</div>
-            <div className="text-neutral-600">Annotations</div>
-          </div>
-          <div className="bg-white rounded-xl shadow-lg border border-neutral-200 p-6 text-center">
-            <div className="text-3xl font-bold text-accent-500 mb-2">0</div>
-            <div className="text-neutral-600">Rankings</div>
-          </div>
-          <div className="bg-white rounded-xl shadow-lg border border-neutral-200 p-6 text-center">
-            <div className="text-3xl font-bold text-neutral-500 mb-2">100%</div>
-            <div className="text-neutral-600">Completion</div>
-          </div>
+                      {[...Array(totalPages)].map((_, index) => {
+                        const page = index + 1;
+                        if (
+                          page === 1 ||
+                          page === totalPages ||
+                          (page >= currentPage - 1 && page <= currentPage + 1)
+                        ) {
+                          return (
+                            <Button
+                              key={page}
+                              variant={
+                                currentPage === page ? "default" : "outline"
+                              }
+                              size="sm"
+                              onClick={() => goToPage(page)}
+                            >
+                              {page}
+                            </Button>
+                          );
+                        } else if (
+                          page === currentPage - 2 ||
+                          page === currentPage + 2
+                        ) {
+                          return (
+                            <span key={page} className="px-2">
+                              ...
+                            </span>
+                          );
+                        }
+                        return null;
+                      })}
+
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => goToPage(currentPage + 1)}
+                        disabled={currentPage === totalPages}
+                      >
+                        Next
+                      </Button>
+                    </div>
+                  </div>
+                )}
+              </>
+            )}
+          </CardContent>
+        </Card>
+
+        <div className="mt-8 text-center">
+          <Button onClick={() => router.push("/projects")}>
+            Manage All Projects
+          </Button>
         </div>
       </div>
     </div>

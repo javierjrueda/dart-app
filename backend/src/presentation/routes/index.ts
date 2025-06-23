@@ -2,6 +2,7 @@ import { Router } from "express";
 import { dreamshotRoutes } from "./dreamshot.routes";
 import { userRoutes } from "./user.routes";
 import { authRoutes } from "./auth.routes";
+import projectRoutes from "./project.routes";
 
 const router = Router();
 
@@ -24,5 +25,6 @@ router.use("/auth", authRoutes);
 // Route modules
 router.use(`${API_VERSION}/dreamshots`, dreamshotRoutes);
 router.use(`${API_VERSION}/users`, userRoutes);
+router.use(`${API_VERSION}/projects`, projectRoutes);
 
 export { router as routes };

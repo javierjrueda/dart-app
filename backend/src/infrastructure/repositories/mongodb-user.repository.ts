@@ -223,6 +223,40 @@ export class MongoDBUserRepository {
     return account;
   }
 
+  async createOAuthAccount(accountData: {
+    userId: string;
+    accountId: string;
+    providerId: string;
+    accessToken?: string;
+    refreshToken?: string;
+    idToken?: string;
+    scope?: string;
+  }): Promise<Account> {
+    const account = Account.createSocialAccount({
+      userId: accountData.userId,
+      accountId: accountData.accountId,
+      providerId: accountData.providerId as any,
+      accessToken: accountData.accessToken,
+      refreshToken: accountData.refreshToken,
+      idToken: accountData.idToken,
+      scope: accountData.scope,
+    });
+
+    const doc = new AccountModel({
+      _id: account.id,
+      userId: account.userId,
+      accountId: account.accountId,
+      providerId: account.providerId,
+      accessToken: account.accessToken,
+      refreshToken: account.refreshToken,
+      idToken: account.idToken,
+      scope: account.scope,
+    });
+
+    await doc.save();
+    return account;
+  }
+
   async findAccountByEmail(email: string): Promise<Account | null> {
     const doc = await AccountModel.findOne({
       accountId: email,
