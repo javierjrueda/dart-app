@@ -137,34 +137,31 @@ export class MediaUseCases {
       throw new Error("Quality must be -1, 0, or 1");
     }
 
-    let updated = 0;
-    let failed = 0;
+    try {
+      console.log(
+        `🔄 Bulk updating ${mediaIds.length} media items with quality: ${quality}`
+      );
 
-    // Process updates in parallel with batching to avoid overwhelming the database
-    const batchSize = 10;
-    for (let i = 0; i < mediaIds.length; i += batchSize) {
-      const batch = mediaIds.slice(i, i + batchSize);
-      const promises = batch.map(async (id) => {
-        try {
-          const media = await this.mediaRepository.findById(id);
-          if (media) {
-            media.updateQuality(quality);
-            await this.mediaRepository.update(id, media);
-            return true;
-          }
-          return false;
-        } catch (error) {
-          console.error(`Failed to update media ${id}:`, error);
-          return false;
-        }
-      });
+      // Use MongoDB's bulk operations for better performance
+      const updated = await this.mediaRepository.bulkUpdateQuality(
+        mediaIds,
+        quality
+      );
 
-      const results = await Promise.all(promises);
-      updated += results.filter((r) => r).length;
-      failed += results.filter((r) => !r).length;
+      console.log(`✅ Successfully updated ${updated} media items`);
+
+      return {
+        updated: updated,
+        failed: mediaIds.length - updated,
+      };
+    } catch (error) {
+      console.error("❌ Bulk quality update failed:", error);
+      throw new Error(
+        `Failed to bulk update quality: ${
+          error instanceof Error ? error.message : "Unknown error"
+        }`
+      );
     }
-
-    return { updated, failed };
   }
 
   async getMediaByType(mediaType: "image" | "video"): Promise<Media[]> {
@@ -370,7 +367,35 @@ export class MediaUseCases {
       combination: Record<string, any>;
       totalCount: number;
       goodCount: number;
+      badCount: number;
+      unratedCount: number;
       goodRate: number;
+      badRate: number;
+      unratedRate: number;
+      averageElo: number;
+      averageEloGoodOnly: number;
+    }>;
+    worstCombinations: Array<{
+      combination: Record<string, any>;
+      totalCount: number;
+      goodCount: number;
+      badCount: number;
+      unratedCount: number;
+      goodRate: number;
+      badRate: number;
+      unratedRate: number;
+      averageElo: number;
+      averageEloGoodOnly: number;
+    }>;
+    unratedCombinations: Array<{
+      combination: Record<string, any>;
+      totalCount: number;
+      goodCount: number;
+      badCount: number;
+      unratedCount: number;
+      goodRate: number;
+      badRate: number;
+      unratedRate: number;
       averageElo: number;
       averageEloGoodOnly: number;
     }>;
@@ -398,6 +423,8 @@ export class MediaUseCases {
         },
         parameterAnalysis: [],
         topCombinations: [],
+        worstCombinations: [],
+        unratedCombinations: [],
         dataQuality: {
           averageBattlesPerImage: 0,
           imagesWithMinimumBattles: 0,
@@ -535,11 +562,11 @@ export class MediaUseCases {
         significance = correlationData.paramValues.length; // Simple significance proxy
       }
 
-      // Sort values by average ELO (best performing first), then by good rate as tiebreaker
+      // Sort values by ELO (Good Only) (best performing first), then by good rate as tiebreaker
       values.sort((a, b) => {
-        // Primary sort: Average ELO (descending)
-        if (b.averageElo !== a.averageElo) {
-          return b.averageElo - a.averageElo;
+        // Primary sort: Average ELO (Good Only) (descending)
+        if (b.averageEloGoodOnly !== a.averageEloGoodOnly) {
+          return b.averageEloGoodOnly - a.averageEloGoodOnly;
         }
         // Secondary sort: Good rate (descending) as tiebreaker
         return b.goodRate - a.goodRate;
@@ -560,6 +587,8 @@ export class MediaUseCases {
         combination: Record<string, any>;
         total: number;
         good: number;
+        bad: number;
+        unrated: number;
         elos: number[];
         goodElos: number[];
       }
@@ -574,6 +603,8 @@ export class MediaUseCases {
             combination: item.generationParams,
             total: 0,
             good: 0,
+            bad: 0,
+            unrated: 0,
             elos: [],
             goodElos: [],
           });
@@ -586,17 +617,26 @@ export class MediaUseCases {
         if (item.quality === 1) {
           stats.good++;
           stats.goodElos.push(item.elo || 1200);
+        } else if (item.quality === -1) {
+          stats.bad++;
+        } else {
+          stats.unrated++;
         }
       }
     });
 
-    const topCombinations = Array.from(combinationMap.values())
+    // Prepare combination data
+    const combinationData = Array.from(combinationMap.values())
       .filter((combo) => combo.total >= 2) // Only combinations with at least 2 samples
       .map((combo) => ({
         combination: combo.combination,
         totalCount: combo.total,
         goodCount: combo.good,
+        badCount: combo.bad,
+        unratedCount: combo.unrated,
         goodRate: combo.good / combo.total,
+        badRate: combo.bad / combo.total,
+        unratedRate: combo.unrated / combo.total,
         averageElo:
           combo.elos.reduce((sum, elo) => sum + elo, 0) / combo.elos.length,
         averageEloGoodOnly:
@@ -604,16 +644,45 @@ export class MediaUseCases {
             ? combo.goodElos.reduce((sum, elo) => sum + elo, 0) /
               combo.goodElos.length
             : 0,
-      }))
+      }));
+
+    // Top combinations (best performing)
+    const topCombinations = [...combinationData]
       .sort((a, b) => {
-        // First sort by average ELO (descending)
-        if (b.averageElo !== a.averageElo) {
-          return b.averageElo - a.averageElo;
+        // First sort by average ELO (Good Only) (descending)
+        if (b.averageEloGoodOnly !== a.averageEloGoodOnly) {
+          return b.averageEloGoodOnly - a.averageEloGoodOnly;
         }
         // Then sort by good rate (descending) as tiebreaker
         return b.goodRate - a.goodRate;
       })
       .slice(0, 10); // Top 10 combinations
+
+    // Worst combinations (most bad images)
+    const worstCombinations = [...combinationData]
+      .filter((combo) => combo.badCount > 0) // Only combinations with bad images
+      .sort((a, b) => {
+        // First sort by bad rate (descending)
+        if (b.badRate !== a.badRate) {
+          return b.badRate - a.badRate;
+        }
+        // Then sort by total bad count (descending) as tiebreaker
+        return b.badCount - a.badCount;
+      })
+      .slice(0, 10); // Top 10 worst combinations
+
+    // Most unrated combinations (need more evaluation)
+    const unratedCombinations = [...combinationData]
+      .filter((combo) => combo.unratedCount > 0) // Only combinations with unrated images
+      .sort((a, b) => {
+        // First sort by unrated count (descending)
+        if (b.unratedCount !== a.unratedCount) {
+          return b.unratedCount - a.unratedCount;
+        }
+        // Then sort by total count (descending) as tiebreaker
+        return b.totalCount - a.totalCount;
+      })
+      .slice(0, 10); // Top 10 unrated combinations
 
     // Data quality metrics
     const averageBattlesPerImage = estimatedTotalBattles / media.length;
@@ -642,6 +711,8 @@ export class MediaUseCases {
       },
       parameterAnalysis,
       topCombinations,
+      worstCombinations,
+      unratedCombinations,
       dataQuality: {
         averageBattlesPerImage,
         imagesWithMinimumBattles,

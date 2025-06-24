@@ -1564,7 +1564,7 @@ function ProjectDetailPageContent() {
                     {analytics.topCombinations.length > 0 && (
                       <div>
                         <h3 className="text-lg font-semibold text-neutral-900 mb-4">
-                          Top Parameter Combinations
+                          🏆 Top Parameter Combinations
                         </h3>
                         <div className="bg-white border border-neutral-200 rounded-lg overflow-hidden">
                           <div className="overflow-x-auto">
@@ -1584,7 +1584,7 @@ function ProjectDetailPageContent() {
                                     Good Rate
                                   </th>
                                   <th className="text-right py-3 px-4 font-medium text-neutral-700">
-                                    Avg ELO
+                                    ELO (Good Only)
                                   </th>
                                 </tr>
                               </thead>
@@ -1631,7 +1631,9 @@ function ProjectDetailPageContent() {
                                         </span>
                                       </td>
                                       <td className="text-right py-3 px-4 text-neutral-600">
-                                        {Math.round(combo.averageElo)}
+                                        {combo.averageEloGoodOnly > 0
+                                          ? Math.round(combo.averageEloGoodOnly)
+                                          : "-"}
                                       </td>
                                     </tr>
                                   )
@@ -1642,6 +1644,409 @@ function ProjectDetailPageContent() {
                         </div>
                       </div>
                     )}
+
+                    {/* Worst Individual Parameters Section */}
+                    <div>
+                      <h3 className="text-lg font-semibold text-neutral-900 mb-4">
+                        ⚠️ Worst Individual Parameters (Avoid These)
+                      </h3>
+                      <div className="space-y-6">
+                        {analytics.parameterAnalysis.map((param: any) => {
+                          // Filter to only show parameters with significant bad rates
+                          const badParameters = param.values
+                            .filter(
+                              (valueData: any) =>
+                                valueData.badCount > 0 &&
+                                valueData.totalCount >= 2
+                            )
+                            .sort((a: any, b: any) => {
+                              // Sort by bad rate descending, then by bad count
+                              if (
+                                b.badCount / b.totalCount !==
+                                a.badCount / a.totalCount
+                              ) {
+                                return (
+                                  b.badCount / b.totalCount -
+                                  a.badCount / a.totalCount
+                                );
+                              }
+                              return b.badCount - a.badCount;
+                            });
+
+                          if (badParameters.length === 0) return null;
+
+                          return (
+                            <div
+                              key={param.paramName}
+                              className="bg-white border border-error-200 rounded-lg p-6"
+                            >
+                              <h4 className="text-md font-medium text-neutral-900 capitalize mb-4">
+                                {param.paramName} - Bad Performance
+                              </h4>
+                              <div className="overflow-x-auto">
+                                <table className="w-full text-sm">
+                                  <thead>
+                                    <tr className="border-b border-neutral-200">
+                                      <th className="text-left py-2 font-medium text-neutral-700">
+                                        Value
+                                      </th>
+                                      <th className="text-right py-2 font-medium text-neutral-700">
+                                        Total
+                                      </th>
+                                      <th className="text-right py-2 font-medium text-neutral-700">
+                                        Bad
+                                      </th>
+                                      <th className="text-right py-2 font-medium text-neutral-700">
+                                        Bad Rate
+                                      </th>
+                                      <th className="text-right py-2 font-medium text-neutral-700">
+                                        Good Rate
+                                      </th>
+                                    </tr>
+                                  </thead>
+                                  <tbody>
+                                    {badParameters.map(
+                                      (valueData: any, index: number) => (
+                                        <tr
+                                          key={index}
+                                          className="border-b border-neutral-100"
+                                        >
+                                          <td className="py-2 font-mono text-neutral-900">
+                                            {String(valueData.value)}
+                                          </td>
+                                          <td className="text-right py-2 text-neutral-600">
+                                            {valueData.totalCount}
+                                          </td>
+                                          <td className="text-right py-2">
+                                            <span className="text-error-600 font-medium">
+                                              {valueData.badCount}
+                                            </span>
+                                          </td>
+                                          <td className="text-right py-2">
+                                            <span className="px-2 py-1 rounded text-xs font-medium bg-error-100 text-error-700">
+                                              {(
+                                                (valueData.badCount /
+                                                  valueData.totalCount) *
+                                                100
+                                              ).toFixed(0)}
+                                              %
+                                            </span>
+                                          </td>
+                                          <td className="text-right py-2">
+                                            <span
+                                              className={`px-2 py-1 rounded text-xs font-medium ${
+                                                valueData.goodRate >= 0.3
+                                                  ? "bg-success-100 text-success-700"
+                                                  : "bg-neutral-100 text-neutral-500"
+                                              }`}
+                                            >
+                                              {(
+                                                valueData.goodRate * 100
+                                              ).toFixed(0)}
+                                              %
+                                            </span>
+                                          </td>
+                                        </tr>
+                                      )
+                                    )}
+                                  </tbody>
+                                </table>
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </div>
+
+                    {/* Most Unrated Parameters Section */}
+                    <div>
+                      <h3 className="text-lg font-semibold text-neutral-900 mb-4">
+                        🔍 Most Unrated Parameters (Need More Testing)
+                      </h3>
+                      <div className="space-y-6">
+                        {analytics.parameterAnalysis.map((param: any) => {
+                          // Filter to only show parameters with significant unrated counts
+                          const unratedParameters = param.values
+                            .filter(
+                              (valueData: any) =>
+                                valueData.unratedCount > 0 &&
+                                valueData.totalCount >= 2
+                            )
+                            .sort((a: any, b: any) => {
+                              // Sort by unrated count descending, then by unrated rate
+                              if (b.unratedCount !== a.unratedCount) {
+                                return b.unratedCount - a.unratedCount;
+                              }
+                              return (
+                                b.unratedCount / b.totalCount -
+                                a.unratedCount / a.totalCount
+                              );
+                            });
+
+                          if (unratedParameters.length === 0) return null;
+
+                          return (
+                            <div
+                              key={param.paramName}
+                              className="bg-white border border-warning-200 rounded-lg p-6"
+                            >
+                              <h4 className="text-md font-medium text-neutral-900 capitalize mb-4">
+                                {param.paramName} - Unrated Images
+                              </h4>
+                              <div className="overflow-x-auto">
+                                <table className="w-full text-sm">
+                                  <thead>
+                                    <tr className="border-b border-neutral-200">
+                                      <th className="text-left py-2 font-medium text-neutral-700">
+                                        Value
+                                      </th>
+                                      <th className="text-right py-2 font-medium text-neutral-700">
+                                        Total
+                                      </th>
+                                      <th className="text-right py-2 font-medium text-neutral-700">
+                                        Unrated
+                                      </th>
+                                      <th className="text-right py-2 font-medium text-neutral-700">
+                                        Unrated Rate
+                                      </th>
+                                      <th className="text-right py-2 font-medium text-neutral-700">
+                                        Priority
+                                      </th>
+                                    </tr>
+                                  </thead>
+                                  <tbody>
+                                    {unratedParameters.map(
+                                      (valueData: any, index: number) => (
+                                        <tr
+                                          key={index}
+                                          className="border-b border-neutral-100"
+                                        >
+                                          <td className="py-2 font-mono text-neutral-900">
+                                            {String(valueData.value)}
+                                          </td>
+                                          <td className="text-right py-2 text-neutral-600">
+                                            {valueData.totalCount}
+                                          </td>
+                                          <td className="text-right py-2">
+                                            <span className="text-warning-600 font-medium">
+                                              {valueData.unratedCount}
+                                            </span>
+                                          </td>
+                                          <td className="text-right py-2">
+                                            <span className="px-2 py-1 rounded text-xs font-medium bg-warning-100 text-warning-700">
+                                              {(
+                                                (valueData.unratedCount /
+                                                  valueData.totalCount) *
+                                                100
+                                              ).toFixed(0)}
+                                              %
+                                            </span>
+                                          </td>
+                                          <td className="text-right py-2">
+                                            <span
+                                              className={`px-2 py-1 rounded text-xs font-medium ${
+                                                valueData.unratedCount >= 10
+                                                  ? "bg-error-100 text-error-700"
+                                                  : valueData.unratedCount >= 5
+                                                  ? "bg-warning-100 text-warning-700"
+                                                  : "bg-neutral-100 text-neutral-500"
+                                              }`}
+                                            >
+                                              {valueData.unratedCount >= 10
+                                                ? "High"
+                                                : valueData.unratedCount >= 5
+                                                ? "Medium"
+                                                : "Low"}
+                                            </span>
+                                          </td>
+                                        </tr>
+                                      )
+                                    )}
+                                  </tbody>
+                                </table>
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </div>
+
+                    {/* Worst Combinations Section */}
+                    {analytics.worstCombinations &&
+                      analytics.worstCombinations.length > 0 && (
+                        <div>
+                          <h3 className="text-lg font-semibold text-neutral-900 mb-4">
+                            ⚠️ Worst Parameter Combinations (Avoid These)
+                          </h3>
+                          <div className="bg-white border border-error-200 rounded-lg overflow-hidden">
+                            <div className="overflow-x-auto">
+                              <table className="w-full text-sm">
+                                <thead className="bg-error-50">
+                                  <tr>
+                                    <th className="text-left py-3 px-4 font-medium text-neutral-700">
+                                      Parameters
+                                    </th>
+                                    <th className="text-right py-3 px-4 font-medium text-neutral-700">
+                                      Total
+                                    </th>
+                                    <th className="text-right py-3 px-4 font-medium text-neutral-700">
+                                      Bad
+                                    </th>
+                                    <th className="text-right py-3 px-4 font-medium text-neutral-700">
+                                      Bad Rate
+                                    </th>
+                                    <th className="text-right py-3 px-4 font-medium text-neutral-700">
+                                      Good Rate
+                                    </th>
+                                  </tr>
+                                </thead>
+                                <tbody>
+                                  {analytics.worstCombinations.map(
+                                    (combo: any, index: number) => (
+                                      <tr
+                                        key={index}
+                                        className="border-b border-neutral-100"
+                                      >
+                                        <td className="py-3 px-4">
+                                          <div className="flex flex-wrap gap-1">
+                                            {Object.entries(
+                                              combo.combination
+                                            ).map(([key, value]) => (
+                                              <span
+                                                key={key}
+                                                className="bg-error-100 text-error-700 px-2 py-1 rounded text-xs font-mono"
+                                              >
+                                                {key}={String(value)}
+                                              </span>
+                                            ))}
+                                          </div>
+                                        </td>
+                                        <td className="text-right py-3 px-4 text-neutral-600">
+                                          {combo.totalCount}
+                                        </td>
+                                        <td className="text-right py-3 px-4">
+                                          <span className="text-error-600 font-medium">
+                                            {combo.badCount}
+                                          </span>
+                                        </td>
+                                        <td className="text-right py-3 px-4">
+                                          <span className="px-2 py-1 rounded text-xs font-medium bg-error-100 text-error-700">
+                                            {(combo.badRate * 100).toFixed(0)}%
+                                          </span>
+                                        </td>
+                                        <td className="text-right py-3 px-4">
+                                          <span
+                                            className={`px-2 py-1 rounded text-xs font-medium ${
+                                              combo.goodRate > 0
+                                                ? "bg-success-100 text-success-700"
+                                                : "bg-neutral-100 text-neutral-500"
+                                            }`}
+                                          >
+                                            {(combo.goodRate * 100).toFixed(0)}%
+                                          </span>
+                                        </td>
+                                      </tr>
+                                    )
+                                  )}
+                                </tbody>
+                              </table>
+                            </div>
+                          </div>
+                        </div>
+                      )}
+
+                    {/* Unrated Combinations Section */}
+                    {analytics.unratedCombinations &&
+                      analytics.unratedCombinations.length > 0 && (
+                        <div>
+                          <h3 className="text-lg font-semibold text-neutral-900 mb-4">
+                            🔍 Most Unrated Combinations (Need More Testing)
+                          </h3>
+                          <div className="bg-white border border-warning-200 rounded-lg overflow-hidden">
+                            <div className="overflow-x-auto">
+                              <table className="w-full text-sm">
+                                <thead className="bg-warning-50">
+                                  <tr>
+                                    <th className="text-left py-3 px-4 font-medium text-neutral-700">
+                                      Parameters
+                                    </th>
+                                    <th className="text-right py-3 px-4 font-medium text-neutral-700">
+                                      Total
+                                    </th>
+                                    <th className="text-right py-3 px-4 font-medium text-neutral-700">
+                                      Unrated
+                                    </th>
+                                    <th className="text-right py-3 px-4 font-medium text-neutral-700">
+                                      Unrated Rate
+                                    </th>
+                                    <th className="text-right py-3 px-4 font-medium text-neutral-700">
+                                      Priority
+                                    </th>
+                                  </tr>
+                                </thead>
+                                <tbody>
+                                  {analytics.unratedCombinations.map(
+                                    (combo: any, index: number) => (
+                                      <tr
+                                        key={index}
+                                        className="border-b border-neutral-100"
+                                      >
+                                        <td className="py-3 px-4">
+                                          <div className="flex flex-wrap gap-1">
+                                            {Object.entries(
+                                              combo.combination
+                                            ).map(([key, value]) => (
+                                              <span
+                                                key={key}
+                                                className="bg-warning-100 text-warning-700 px-2 py-1 rounded text-xs font-mono"
+                                              >
+                                                {key}={String(value)}
+                                              </span>
+                                            ))}
+                                          </div>
+                                        </td>
+                                        <td className="text-right py-3 px-4 text-neutral-600">
+                                          {combo.totalCount}
+                                        </td>
+                                        <td className="text-right py-3 px-4">
+                                          <span className="text-warning-600 font-medium">
+                                            {combo.unratedCount}
+                                          </span>
+                                        </td>
+                                        <td className="text-right py-3 px-4">
+                                          <span className="px-2 py-1 rounded text-xs font-medium bg-warning-100 text-warning-700">
+                                            {(combo.unratedRate * 100).toFixed(
+                                              0
+                                            )}
+                                            %
+                                          </span>
+                                        </td>
+                                        <td className="text-right py-3 px-4">
+                                          <span
+                                            className={`px-2 py-1 rounded text-xs font-medium ${
+                                              combo.unratedCount >= 5
+                                                ? "bg-error-100 text-error-700"
+                                                : combo.unratedCount >= 3
+                                                ? "bg-warning-100 text-warning-700"
+                                                : "bg-neutral-100 text-neutral-500"
+                                            }`}
+                                          >
+                                            {combo.unratedCount >= 5
+                                              ? "High"
+                                              : combo.unratedCount >= 3
+                                              ? "Medium"
+                                              : "Low"}
+                                          </span>
+                                        </td>
+                                      </tr>
+                                    )
+                                  )}
+                                </tbody>
+                              </table>
+                            </div>
+                          </div>
+                        </div>
+                      )}
 
                     {/* Data Quality Section */}
                     <div>

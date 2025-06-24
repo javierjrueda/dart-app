@@ -1,7 +1,7 @@
 import { Request, Response, NextFunction } from "express";
 import { verifyAuth } from "@/lib/auth";
 import { MongoDBUserRepository } from "@/infrastructure/repositories/mongodb-user.repository";
-import { connectDatabase } from "@/infrastructure/database/connection";
+import { ensureDatabaseConnection } from "@/infrastructure/database/connection";
 
 export interface AuthenticatedRequest extends Request {
   user?: {
@@ -28,7 +28,7 @@ export const requireAuth = async (
 ): Promise<void> => {
   try {
     const authHeader = req.headers.authorization;
-    
+
     if (!authHeader || !authHeader.startsWith("Bearer ")) {
       res.status(401).json({
         error: "Unauthorized",
@@ -39,7 +39,7 @@ export const requireAuth = async (
 
     const token = authHeader.substring(7);
     const decoded = await verifyAuth(token);
-    
+
     if (!decoded) {
       res.status(401).json({
         error: "Unauthorized",
@@ -48,11 +48,11 @@ export const requireAuth = async (
       return;
     }
 
-    // Get user from database
-    await connectDatabase();
+    // Ensure database connection (safe to call multiple times)
+    await ensureDatabaseConnection();
     const userRepo = new MongoDBUserRepository();
     const user = await userRepo.findUserById(decoded.id);
-    
+
     if (!user) {
       res.status(401).json({
         error: "Unauthorized",
@@ -67,7 +67,7 @@ export const requireAuth = async (
       userId: user.id,
       expiresAt: new Date(decoded.exp * 1000),
     };
-    
+
     next();
   } catch (error) {
     console.error("Auth middleware error:", error);
@@ -85,7 +85,7 @@ export const optionalAuth = async (
 ): Promise<void> => {
   try {
     const authHeader = req.headers.authorization;
-    
+
     if (!authHeader || !authHeader.startsWith("Bearer ")) {
       next();
       return;
@@ -93,13 +93,13 @@ export const optionalAuth = async (
 
     const token = authHeader.substring(7);
     const decoded = await verifyAuth(token);
-    
+
     if (decoded) {
-      // Get user from database
-      await connectDatabase();
+      // Ensure database connection (safe to call multiple times)
+      await ensureDatabaseConnection();
       const userRepo = new MongoDBUserRepository();
       const user = await userRepo.findUserById(decoded.id);
-      
+
       if (user) {
         req.user = user.toProfile();
         req.session = {

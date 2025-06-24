@@ -181,4 +181,41 @@ export class MongoDBMediaRepository implements MediaRepository {
     );
     return filenames;
   }
+
+  async bulkUpdateQuality(
+    mediaIds: string[],
+    quality: number
+  ): Promise<number> {
+    try {
+      console.log(
+        `🔄 Performing bulk quality update for ${mediaIds.length} media items`
+      );
+
+      // Use MongoDB's bulk write operation for better performance
+      const bulkOperations = mediaIds.map((id) => ({
+        updateOne: {
+          filter: { _id: id },
+          update: {
+            $set: {
+              quality: quality,
+              updatedAt: new Date(),
+            },
+          },
+        },
+      }));
+
+      const result = await MediaModel.bulkWrite(bulkOperations, {
+        ordered: false, // Continue processing even if some updates fail
+      });
+
+      console.log(
+        `✅ Bulk update completed: ${result.modifiedCount}/${mediaIds.length} updated`
+      );
+
+      return result.modifiedCount;
+    } catch (error) {
+      console.error("❌ Bulk update failed:", error);
+      throw error;
+    }
+  }
 }

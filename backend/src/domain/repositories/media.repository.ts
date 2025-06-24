@@ -12,4 +12,5 @@ export interface MediaRepository {
   findByPromptDescription(promptDescription: string): Promise<Media[]>;
   findByFilename(projectId: string, filename: string): Promise<Media | null>;
   findExistingFilenames(projectId: string): Promise<string[]>;
+  bulkUpdateQuality(mediaIds: string[], quality: number): Promise<number>;
 }

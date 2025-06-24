@@ -70,57 +70,77 @@ export class BattleUseCases {
       throw new Error("Invalid battle result");
     }
 
-    // Get current media items
-    const [mediaA, mediaB] = await Promise.all([
-      this.mediaRepository.findById(data.mediaAId),
-      this.mediaRepository.findById(data.mediaBId),
-    ]);
+    try {
+      console.log(
+        `⚔️ Conducting battle: ${data.mediaAId} vs ${data.mediaBId}, result: ${data.result}`
+      );
 
-    if (!mediaA || !mediaB) {
-      throw new Error("One or both media items not found");
+      // Get current media items
+      const [mediaA, mediaB] = await Promise.all([
+        this.mediaRepository.findById(data.mediaAId),
+        this.mediaRepository.findById(data.mediaBId),
+      ]);
+
+      if (!mediaA || !mediaB) {
+        throw new Error("One or both media items not found");
+      }
+
+      // Ensure both media belong to the same project
+      if (
+        mediaA.projectId !== data.projectId ||
+        mediaB.projectId !== data.projectId
+      ) {
+        throw new Error("Media items must belong to the specified project");
+      }
+
+      // Create battle with ELO calculations
+      const battle = Battle.create({
+        projectId: data.projectId,
+        mediaAId: data.mediaAId,
+        mediaBId: data.mediaBId,
+        result: data.result,
+        userId: data.userId,
+        mediaAEloBefore: mediaA.elo,
+        mediaBEloBefore: mediaB.elo,
+      });
+
+      // Update media ELO ratings (only if not a skip)
+      if (data.result !== "skip") {
+        mediaA.updateElo(battle.mediaAEloAfter);
+        mediaB.updateElo(battle.mediaBEloAfter);
+      }
+
+      // Save to database with improved error handling
+      const [savedBattle, updatedMediaA, updatedMediaB] = await Promise.all([
+        this.battleRepository.create(battle),
+        this.mediaRepository.update(data.mediaAId, mediaA),
+        this.mediaRepository.update(data.mediaBId, mediaB),
+      ]);
+
+      if (!updatedMediaA || !updatedMediaB) {
+        throw new Error("Failed to update media ELO ratings");
+      }
+
+      console.log(
+        `✅ Battle completed successfully: ${data.mediaAId} vs ${data.mediaBId}`
+      );
+
+      return {
+        battle: savedBattle,
+        updatedMediaA,
+        updatedMediaB,
+      };
+    } catch (error) {
+      console.error(
+        `❌ Battle failed: ${data.mediaAId} vs ${data.mediaBId}:`,
+        error
+      );
+      throw new Error(
+        `Failed to conduct battle: ${
+          error instanceof Error ? error.message : "Unknown error"
+        }`
+      );
     }
-
-    // Ensure both media belong to the same project
-    if (
-      mediaA.projectId !== data.projectId ||
-      mediaB.projectId !== data.projectId
-    ) {
-      throw new Error("Media items must belong to the specified project");
-    }
-
-    // Create battle with ELO calculations
-    const battle = Battle.create({
-      projectId: data.projectId,
-      mediaAId: data.mediaAId,
-      mediaBId: data.mediaBId,
-      result: data.result,
-      userId: data.userId,
-      mediaAEloBefore: mediaA.elo,
-      mediaBEloBefore: mediaB.elo,
-    });
-
-    // Update media ELO ratings (only if not a skip)
-    if (data.result !== "skip") {
-      mediaA.updateElo(battle.mediaAEloAfter);
-      mediaB.updateElo(battle.mediaBEloAfter);
-    }
-
-    // Save to database
-    const [savedBattle, updatedMediaA, updatedMediaB] = await Promise.all([
-      this.battleRepository.create(battle),
-      this.mediaRepository.update(data.mediaAId, mediaA),
-      this.mediaRepository.update(data.mediaBId, mediaB),
-    ]);
-
-    if (!updatedMediaA || !updatedMediaB) {
-      throw new Error("Failed to update media ELO ratings");
-    }
-
-    return {
-      battle: savedBattle,
-      updatedMediaA,
-      updatedMediaB,
-    };
   }
 
   /**
