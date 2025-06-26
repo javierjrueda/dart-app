@@ -241,7 +241,7 @@ export default function OptimizedBulkUpload({
       }));
 
       const response = await fetch(
-        `http://localhost:3001/api/v1/projects/${projectId}/media/batch-presigned-urls`,
+        `${process.env.NEXT_PUBLIC_API_URL}/api/v1/projects/${projectId}/media/batch-presigned-urls`,
         {
           method: "POST",
           headers: {
@@ -360,7 +360,7 @@ export default function OptimizedBulkUpload({
         }));
 
         const confirmResponse = await fetch(
-          `http://localhost:3001/api/v1/projects/${projectId}/media/confirm-batch-upload`,
+          `${process.env.NEXT_PUBLIC_API_URL}/api/v1/projects/${projectId}/media/confirm-batch-upload`,
           {
             method: "POST",
             headers: {

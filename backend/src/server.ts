@@ -1,3 +1,6 @@
+// Register module aliases first (for production)
+import "module-alias/register";
+
 import express from "express";
 import cors from "cors";
 import helmet from "helmet";
@@ -8,8 +11,16 @@ import path from "path";
 import { connectDatabase } from "@/infrastructure/database/connection";
 import { routes } from "@/presentation/routes";
 
-// Load environment variables from parent directory's .env file
-dotenv.config({ path: path.join(__dirname, "../../.env") });
+// Load environment variables
+// In production (Railway), environment variables are provided by the platform
+// In development, load from .env file
+if (process.env.NODE_ENV !== "production") {
+  dotenv.config({ path: path.join(__dirname, "../../.env") });
+} else {
+  // In production, just initialize dotenv without a specific path
+  // This allows Railway's environment variables to be used
+  dotenv.config();
+}
 
 const app = express();
 const PORT = process.env.PORT || 3001;
@@ -30,6 +41,7 @@ app.use(
     origin: [
       "http://localhost:3000",
       "https://localhost:3000",
+      "https://dart.dreamshot.io",
       process.env.FRONTEND_URL || "http://localhost:3000",
     ],
     credentials: true,
@@ -113,6 +125,19 @@ app.use("*", (req, res) => {
 // Start server
 const startServer = async () => {
   try {
+    // Debug environment variables in production
+    if (process.env.NODE_ENV === "production") {
+      console.log("🔧 Environment check:");
+      console.log(`NODE_ENV: ${process.env.NODE_ENV}`);
+      console.log(`PORT: ${process.env.PORT}`);
+      console.log(
+        `MONGODB_URI: ${process.env.MONGODB_URI ? "✅ Set" : "❌ Missing"}`
+      );
+      console.log(
+        `JWT_SECRET: ${process.env.JWT_SECRET ? "✅ Set" : "❌ Missing"}`
+      );
+    }
+
     // Connect to database once at startup
     await connectDatabase();
     console.log("✅ Database connection established");

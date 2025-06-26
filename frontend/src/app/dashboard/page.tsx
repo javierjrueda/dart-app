@@ -64,7 +64,7 @@ export default function Dashboard() {
       }
 
       const response = await fetch(
-        `http://localhost:3001/api/v1/projects?page=${currentPage}&limit=${projectsPerPage}`,
+        `${process.env.NEXT_PUBLIC_API_URL}/api/v1/projects?page=${currentPage}&limit=${projectsPerPage}`,
         {
           headers: {
             Authorization: `Bearer ${accessToken}`,

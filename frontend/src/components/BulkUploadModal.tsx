@@ -78,7 +78,7 @@ export default function BulkUploadModal({
     const pollProgress = async () => {
       try {
         const response = await fetch(
-          `http://localhost:3001/api/v1/bulk-upload/${uploadSessionId}/progress`,
+          `${process.env.NEXT_PUBLIC_API_URL}/api/v1/bulk-upload/${uploadSessionId}/progress`,
           {
             headers: {
               Authorization: `Bearer ${(session as any)?.accessToken}`,
@@ -141,7 +141,7 @@ export default function BulkUploadModal({
 
     try {
       const response = await fetch(
-        `http://localhost:3001/api/v1/projects/${projectId}/media/bulk-upload`,
+        `${process.env.NEXT_PUBLIC_API_URL}/api/v1/projects/${projectId}/media/bulk-upload`,
         {
           method: "POST",
           headers: {
@@ -215,7 +215,7 @@ export default function BulkUploadModal({
 
     try {
       const response = await fetch(
-        `http://localhost:3001/api/v1/bulk-upload/${uploadSessionId}/cancel`,
+        `${process.env.NEXT_PUBLIC_API_URL}/api/v1/bulk-upload/${uploadSessionId}/cancel`,
         {
           method: "POST",
           headers: {

@@ -159,3 +159,4 @@ mongo-data/
 # Temporary files
 *.tmp
 *.temp 
+frontend/.env.production

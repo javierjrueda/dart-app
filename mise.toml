@@ -99,4 +99,140 @@ run = [
   "test -n \"$MONGODB_URI\" && echo '✅ MONGODB_URI set' || echo '❌ MONGODB_URI missing'",
   "echo 'Node version:'",
   "node --version"
+]
+
+# ===== DEPLOYMENT TASKS =====
+
+[tasks."deploy:check"]
+description = "Check deployment prerequisites"
+run = [
+  "echo '🔍 Checking deployment prerequisites...'",
+  "echo '📦 Checking CLIs:'",
+  "command -v railway >/dev/null 2>&1 && echo '✅ Railway CLI installed' || echo '❌ Railway CLI missing - run: npm install -g @railway/cli'",
+  "command -v vercel >/dev/null 2>&1 && echo '✅ Vercel CLI installed' || echo '❌ Vercel CLI missing - run: npm install -g vercel'",
+  "echo '🔐 Checking authentication:'",
+  "cd backend && railway whoami >/dev/null 2>&1 && echo '✅ Railway authenticated' || echo '❌ Railway not authenticated - run: railway login'",
+  "cd frontend && vercel whoami >/dev/null 2>&1 && echo '✅ Vercel authenticated' || echo '❌ Vercel not authenticated - run: vercel login'",
+  "echo '🌍 Checking Railway environment variables:'",
+  "cd backend && railway variables || echo '❌ Cannot check Railway variables - ensure you are authenticated and have a project linked'"
+]
+
+[tasks."deploy:setup"]
+description = "Install deployment CLIs and setup authentication"
+run = [
+  "echo '🛠️  Setting up deployment tools...'",
+  "echo '📦 Installing CLIs...'",
+  "npm install -g @railway/cli vercel",
+  "echo '🔐 Please authenticate with both services:'",
+  "echo '1️⃣  Railway authentication:'",
+  "railway login",
+  "echo '2️⃣  Vercel authentication:'", 
+  "vercel login",
+  "echo '✅ Deployment setup complete!'"
+]
+
+[tasks."build:backend"]
+description = "Build backend for production"
+run = [
+  "echo '🔧 Building backend...'",
+  "cd backend",
+  "npm install",
+  "npm run build",
+  "echo '✅ Backend build complete!'"
+]
+
+[tasks."build:frontend"] 
+description = "Build frontend for production"
+run = [
+  "echo '🌐 Building frontend...'",
+  "cd frontend",
+  "npm install",
+  "npm run build",
+  "echo '✅ Frontend build complete!'"
+]
+
+[tasks."build:all"]
+description = "Build both frontend and backend"
+run = [
+  "echo '🏗️  Building entire application...'",
+  "mise run build:backend",
+  "mise run build:frontend",
+  "echo '✅ All builds complete!'"
+]
+
+[tasks."deploy:backend"]
+description = "Deploy backend to Railway"
+run = [
+  "echo '🚂 Deploying backend to Railway...'",
+  "cd backend",
+  "mise run build:backend",
+  "railway up",
+  "echo '✅ Backend deployed to Railway!'"
+]
+
+[tasks."deploy:frontend"]
+description = "Deploy frontend to Vercel" 
+run = [
+  "echo '▲ Deploying frontend to Vercel...'",
+  "cd frontend",
+  "vercel --prod",
+  "echo '✅ Frontend deployed to Vercel!'"
+]
+
+[tasks."deploy:all"]
+description = "Deploy both frontend and backend simultaneously"
+run = [
+  '''
+  echo "🚀 Starting full deployment..."
+  
+  # Check prerequisites first
+  mise run deploy:check
+  
+  echo "🏗️  Building applications..."
+  mise run build:all
+  
+  echo "📤 Deploying to production..."
+  echo "🚂 Deploying backend to Railway..."
+  cd backend && railway up &
+  BACKEND_PID=$!
+  
+  echo "▲ Deploying frontend to Vercel..."
+  cd frontend && vercel --prod &
+  FRONTEND_PID=$!
+  
+  # Wait for both deployments to complete
+  echo "⏳ Waiting for deployments to complete..."
+  wait $BACKEND_PID
+  echo "✅ Backend deployment complete!"
+  
+  wait $FRONTEND_PID  
+  echo "✅ Frontend deployment complete!"
+  
+  echo "🎉 Full deployment successful!"
+  echo "📋 Next steps:"
+  echo "  1. Check Railway dashboard for backend URL"
+  echo "  2. Check Vercel dashboard for frontend URL"
+  echo "  3. Update CORS settings if needed"
+  echo "  4. Test the deployed application"
+  '''
+]
+
+[tasks."deploy:status"]
+description = "Check deployment status"
+run = [
+  "echo '📊 Checking deployment status...'",
+  "echo '🚂 Railway (Backend):'",
+  "cd backend && railway status",
+  "echo '▲ Vercel (Frontend):'", 
+  "cd frontend && vercel ls",
+]
+
+[tasks."deploy:logs"]
+description = "View deployment logs"
+run = [
+  "echo '📋 Viewing deployment logs...'",
+  "echo '🚂 Railway Backend Logs:'",
+  "cd backend && railway logs",
+  "echo '▲ Vercel Frontend Logs:'",
+  "cd frontend && vercel logs"
 ] 

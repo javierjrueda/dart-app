@@ -59,7 +59,7 @@ export default function Leaderboard({ projectId }: LeaderboardProps) {
       const accessToken = (session as any)?.accessToken;
 
       const response = await fetch(
-        `http://localhost:3001/api/v1/battles/projects/${projectId}/leaderboard?limit=10`,
+        `${process.env.NEXT_PUBLIC_API_URL}/api/v1/battles/projects/${projectId}/leaderboard?limit=10`,
         {
           headers: {
             Authorization: `Bearer ${accessToken}`,

@@ -60,7 +60,7 @@ export default function BattleArena({ projectId }: BattleArenaProps) {
       const accessToken = (session as any)?.accessToken;
 
       const response = await fetch(
-        `http://localhost:3001/api/v1/battles/projects/${projectId}/pair`,
+        `${process.env.NEXT_PUBLIC_API_URL}/api/v1/battles/projects/${projectId}/pair`,
         {
           headers: {
             Authorization: `Bearer ${accessToken}`,
@@ -94,7 +94,7 @@ export default function BattleArena({ projectId }: BattleArenaProps) {
       const accessToken = (session as any)?.accessToken;
 
       const response = await fetch(
-        `http://localhost:3001/api/v1/battles/projects/${projectId}`,
+        `${process.env.NEXT_PUBLIC_API_URL}/api/v1/battles/projects/${projectId}`,
         {
           method: "POST",
           headers: {
@@ -137,7 +137,7 @@ export default function BattleArena({ projectId }: BattleArenaProps) {
       const accessToken = (session as any)?.accessToken;
 
       const response = await fetch(
-        `http://localhost:3001/api/v1/battles/projects/${projectId}/penalties`,
+        `${process.env.NEXT_PUBLIC_API_URL}/api/v1/battles/projects/${projectId}/penalties`,
         {
           method: "POST",
           headers: {

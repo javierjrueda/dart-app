@@ -66,11 +66,14 @@ export default function ProjectsPage() {
         return;
       }
 
-      const response = await fetch("http://localhost:3001/api/v1/projects", {
-        headers: {
-          Authorization: `Bearer ${accessToken}`,
-        },
-      });
+      const response = await fetch(
+        `${process.env.NEXT_PUBLIC_API_URL}/api/v1/projects`,
+        {
+          headers: {
+            Authorization: `Bearer ${accessToken}`,
+          },
+        }
+      );
 
       if (response.ok) {
         const projectsData = await response.json();
@@ -113,14 +116,17 @@ export default function ProjectsPage() {
         return;
       }
 
-      const response = await fetch("http://localhost:3001/api/v1/projects", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${accessToken}`,
-        },
-        body: JSON.stringify({ name: newProjectName.trim() }),
-      });
+      const response = await fetch(
+        `${process.env.NEXT_PUBLIC_API_URL}/api/v1/projects`,
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${accessToken}`,
+          },
+          body: JSON.stringify({ name: newProjectName.trim() }),
+        }
+      );
 
       if (response.ok) {
         const newProject = await response.json();

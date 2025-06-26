@@ -111,7 +111,7 @@ export default function MediaUpload({
       formData.append("extractionMethod", "filename");
 
       const response = await fetch(
-        `http://localhost:3001/api/v1/projects/${projectId}/media/upload`,
+        `${process.env.NEXT_PUBLIC_API_URL}/api/v1/projects/${projectId}/media/upload`,
         {
           method: "POST",
           body: formData,

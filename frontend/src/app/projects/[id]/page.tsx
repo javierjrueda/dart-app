@@ -196,7 +196,7 @@ function ProjectDetailPageContent() {
       }
 
       const response = await fetch(
-        `http://localhost:3001/api/v1/projects/${projectId}`,
+        `${process.env.NEXT_PUBLIC_API_URL}/api/v1/projects/${projectId}`,
         {
           headers: {
             Authorization: `Bearer ${accessToken}`,
@@ -234,7 +234,7 @@ function ProjectDetailPageContent() {
       }
 
       const response = await fetch(
-        `http://localhost:3001/api/v1/projects/${projectId}/media/generation-params`,
+        `${process.env.NEXT_PUBLIC_API_URL}/api/v1/projects/${projectId}/media/generation-params`,
         {
           headers: {
             Authorization: `Bearer ${accessToken}`,
@@ -261,7 +261,7 @@ function ProjectDetailPageContent() {
 
       console.log(`Fetching battle stats for project: ${projectId}`);
       const response = await fetch(
-        `http://localhost:3001/api/v1/battles/projects/${projectId}/stats`,
+        `${process.env.NEXT_PUBLIC_API_URL}/api/v1/battles/projects/${projectId}/stats`,
         {
           headers: {
             Authorization: `Bearer ${accessToken}`,
@@ -297,7 +297,7 @@ function ProjectDetailPageContent() {
       }
 
       const response = await fetch(
-        `http://localhost:3001/api/v1/projects/${projectId}/analytics`,
+        `${process.env.NEXT_PUBLIC_API_URL}/api/v1/projects/${projectId}/analytics`,
         {
           headers: {
             Authorization: `Bearer ${accessToken}`,
@@ -341,7 +341,7 @@ function ProjectDetailPageContent() {
 
       // Fetch all media at once (no pagination on server)
       const response = await fetch(
-        `http://localhost:3001/api/v1/projects/${projectId}/media?page=1&limit=10000`,
+        `${process.env.NEXT_PUBLIC_API_URL}/api/v1/projects/${projectId}/media?page=1&limit=10000`,
         {
           headers: {
             Authorization: `Bearer ${accessToken}`,
@@ -421,7 +421,7 @@ function ProjectDetailPageContent() {
       const accessToken = (session as any)?.accessToken;
 
       const response = await fetch(
-        `http://localhost:3001/api/v1/media/${mediaId}/quality`,
+        `${process.env.NEXT_PUBLIC_API_URL}/api/v1/media/${mediaId}/quality`,
         {
           method: "PATCH",
           headers: {
@@ -465,7 +465,7 @@ function ProjectDetailPageContent() {
       const accessToken = (session as any)?.accessToken;
 
       const response = await fetch(
-        `http://localhost:3001/api/v1/media/bulk-quality`,
+        `${process.env.NEXT_PUBLIC_API_URL}/api/v1/media/bulk-quality`,
         {
           method: "PATCH",
           headers: {
