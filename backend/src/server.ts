@@ -146,7 +146,7 @@ const startServer = async () => {
     const HOST =
       process.env.NODE_ENV === "production" ? "0.0.0.0" : "localhost";
 
-    app.listen(PORT, HOST, () => {
+    server = app.listen(PORT, HOST, () => {
       console.log(`🚀 DART Backend running on ${HOST}:${PORT}`);
       console.log(`📊 Health check: http://${HOST}:${PORT}/health`);
       console.log(`🌍 Environment: ${process.env.NODE_ENV || "development"}`);
@@ -157,23 +157,40 @@ const startServer = async () => {
   }
 };
 
-// Graceful shutdown
-process.on("SIGINT", async () => {
-  console.log("👋 Received SIGINT, gracefully shutting down...");
-  const { disconnectDatabase } = await import(
-    "@/infrastructure/database/connection"
-  );
-  await disconnectDatabase();
-  process.exit(0);
-});
+// Keep track of server instance
+let server: any;
 
-process.on("SIGTERM", async () => {
-  console.log("👋 Received SIGTERM, gracefully shutting down...");
-  const { disconnectDatabase } = await import(
-    "@/infrastructure/database/connection"
-  );
-  await disconnectDatabase();
-  process.exit(0);
-});
+// Graceful shutdown handler
+const gracefulShutdown = async (signal: string) => {
+  console.log(`👋 Received ${signal}, starting graceful shutdown...`);
+
+  // Stop accepting new connections
+  if (server) {
+    server.close(() => {
+      console.log("🛑 HTTP server closed");
+    });
+  }
+
+  // Give ongoing requests 30 seconds to complete
+  setTimeout(() => {
+    console.log("⏱️  Forcing shutdown after timeout");
+    process.exit(0);
+  }, 30000);
+
+  try {
+    const { disconnectDatabase } = await import(
+      "@/infrastructure/database/connection"
+    );
+    await disconnectDatabase();
+    console.log("🔌 Database disconnected");
+    process.exit(0);
+  } catch (error) {
+    console.error("Error during shutdown:", error);
+    process.exit(1);
+  }
+};
+
+process.on("SIGINT", () => gracefulShutdown("SIGINT"));
+process.on("SIGTERM", () => gracefulShutdown("SIGTERM"));
 
 startServer();

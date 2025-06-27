@@ -26,14 +26,7 @@ run = [
   "mise run dev:start"
 ]
 
-[tasks."dev:setup"]
-description = "Setup environment and check prerequisites"
-run = [
-  "echo '📝 Setting up development environment...'",
-  "echo '✅ Using global .env file for environment variables'",
-  "echo '☁️  Using MongoDB Atlas (cloud database)'",
-  "echo '🔧 Environment setup complete!'"
-]
+
 
 [tasks."dev:start"]
 description = "Start both servers"
@@ -89,17 +82,6 @@ run = [
   "echo '🔄 Project reset complete!'"
 ]
 
-[tasks."env:check"]
-description = "Check environment configuration"
-run = [
-  "echo '🔍 Checking environment configuration...'",
-  "echo 'Global .env file:'",
-  "test -f .env && echo '✅ .env exists' || echo '❌ .env missing'",
-  "echo 'MongoDB URI configured:'",
-  "test -n \"$MONGODB_URI\" && echo '✅ MONGODB_URI set' || echo '❌ MONGODB_URI missing'",
-  "echo 'Node version:'",
-  "node --version"
-]
 
 # ===== DEPLOYMENT TASKS =====
 
@@ -113,7 +95,6 @@ run = [
   "echo '🔐 Checking authentication:'",
   "cd backend && railway whoami >/dev/null 2>&1 && echo '✅ Railway authenticated' || echo '❌ Railway not authenticated - run: railway login'",
   "cd frontend && vercel whoami >/dev/null 2>&1 && echo '✅ Vercel authenticated' || echo '❌ Vercel not authenticated - run: vercel login'",
-  "echo '🌍 Checking Railway environment variables:'",
 ]
 
 [tasks."deploy:setup"]

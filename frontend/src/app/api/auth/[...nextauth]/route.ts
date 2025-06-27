@@ -68,7 +68,7 @@ const handler = NextAuth({
         try {
           // Create/sync OAuth user with backend
           const res = await fetch(
-            `${process.env.NEXT_PUBLIC_API_URL}/auth/oauth-sync`,
+            `${process.env.NEXT_PUBLIC_API_URL}/api/auth/oauth-sync`,
             {
               method: "POST",
               headers: { "Content-Type": "application/json" },
@@ -98,8 +98,10 @@ const handler = NextAuth({
       if (session.user) {
         (session.user as any).id = token.id;
         (session.user as any).role = token.role;
+        // Also add accessToken to user for backward compatibility
+        (session.user as any).accessToken = token.accessToken;
       }
-      // Add accessToken to the session object itself, not just the user
+      // Add accessToken to the session object itself
       (session as any).accessToken = token.accessToken;
       return session;
     },
