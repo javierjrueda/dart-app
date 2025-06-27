@@ -58,10 +58,21 @@ export default function Dashboard() {
       setError("");
       const accessToken = (session as any)?.accessToken;
 
+      console.log("=== DEBUG: Dashboard project fetch ===");
+      console.log("Session object:", session);
+      console.log("Access token found:", !!accessToken);
+      console.log("API URL:", process.env.NEXT_PUBLIC_API_URL);
+
       if (!accessToken) {
+        console.error("No access token found in session:", session);
         setError("Authentication error: No access token found");
         return;
       }
+
+      console.log(
+        "Making API request to:",
+        `${process.env.NEXT_PUBLIC_API_URL}/api/v1/projects?page=${currentPage}&limit=${projectsPerPage}`
+      );
 
       const response = await fetch(
         `${process.env.NEXT_PUBLIC_API_URL}/api/v1/projects?page=${currentPage}&limit=${projectsPerPage}`,
@@ -72,9 +83,16 @@ export default function Dashboard() {
         }
       );
 
+      console.log("API Response status:", response.status);
+      console.log(
+        "API Response headers:",
+        Object.fromEntries(response.headers.entries())
+      );
+
       if (response.ok) {
         const data = await response.json();
-        // Handle paginated response format
+        console.log("Projects data received:", data);
+
         if (data.projects && Array.isArray(data.projects)) {
           setProjects(data.projects);
           setTotalProjects(data.total || data.projects.length);
@@ -87,11 +105,15 @@ export default function Dashboard() {
           setTotalProjects(0);
         }
       } else {
+        const errorText = await response.text();
+        console.error("API Error response:", errorText);
         console.error("Failed to fetch projects", response.status);
         if (response.status === 401) {
           setError("Authentication error: Please sign out and sign in again");
         } else {
-          setError("Failed to load projects");
+          setError(
+            `Failed to load projects: ${response.status} ${response.statusText}`
+          );
         }
       }
     } catch (error) {

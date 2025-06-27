@@ -114,7 +114,6 @@ run = [
   "cd backend && railway whoami >/dev/null 2>&1 && echo '✅ Railway authenticated' || echo '❌ Railway not authenticated - run: railway login'",
   "cd frontend && vercel whoami >/dev/null 2>&1 && echo '✅ Vercel authenticated' || echo '❌ Vercel not authenticated - run: vercel login'",
   "echo '🌍 Checking Railway environment variables:'",
-  "cd backend && railway variables || echo '❌ Cannot check Railway variables - ensure you are authenticated and have a project linked'"
 ]
 
 [tasks."deploy:setup"]
