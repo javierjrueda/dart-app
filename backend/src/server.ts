@@ -23,7 +23,7 @@ if (process.env.NODE_ENV !== "production") {
 }
 
 const app = express();
-const PORT = process.env.PORT || 3001;
+const PORT = parseInt(process.env.PORT || "3001", 10);
 
 // Rate limiting
 const limiter = rateLimit({
@@ -42,6 +42,7 @@ app.use(
       "http://localhost:3000",
       "https://localhost:3000",
       "https://dart.dreamshot.io",
+      "https://dart-frontend.vercel.app",
       process.env.FRONTEND_URL || "http://localhost:3000",
     ],
     credentials: true,
@@ -142,9 +143,12 @@ const startServer = async () => {
     await connectDatabase();
     console.log("✅ Database connection established");
 
-    app.listen(PORT, () => {
-      console.log(`🚀 DART Backend running on port ${PORT}`);
-      console.log(`📊 Health check: http://localhost:${PORT}/health`);
+    const HOST =
+      process.env.NODE_ENV === "production" ? "0.0.0.0" : "localhost";
+
+    app.listen(PORT, HOST, () => {
+      console.log(`🚀 DART Backend running on ${HOST}:${PORT}`);
+      console.log(`📊 Health check: http://${HOST}:${PORT}/health`);
       console.log(`🌍 Environment: ${process.env.NODE_ENV || "development"}`);
     });
   } catch (error) {

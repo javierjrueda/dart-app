@@ -78,8 +78,11 @@ export const authClient = {
       return {};
     }
 
-    const accessToken = (session.user as any).accessToken;
+    // Try to get token from session object first, then from user
+    const accessToken =
+      (session as any).accessToken || (session.user as any).accessToken;
     if (!accessToken) {
+      console.warn("No access token found in session:", session);
       return {};
     }
 

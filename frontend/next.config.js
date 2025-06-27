@@ -34,7 +34,7 @@ const nextConfig = {
               "default-src 'self'",
               "script-src 'self' 'unsafe-eval' 'unsafe-inline' https://fonts.googleapis.com",
               "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
-              "font-src 'self' https://fonts.gstatic.com",
+              "font-src 'self' https://fonts.gstatic.com data:",
               "img-src 'self' data: blob: https:",
               // Allow localhost connections in development, only HTTPS in production
               `connect-src 'self' https: ${
