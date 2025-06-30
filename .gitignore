@@ -160,3 +160,4 @@ mongo-data/
 *.tmp
 *.temp 
 frontend/.env.production
+.vercel
