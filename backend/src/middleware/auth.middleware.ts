@@ -1,5 +1,5 @@
 import { Request, Response, NextFunction } from "express";
-import { verifyAuth } from "@/lib/auth";
+import { verifyAuth } from "@/lib/auth-utils";
 import { MongoDBUserRepository } from "@/infrastructure/repositories/mongodb-user.repository";
 import { ensureDatabaseConnection } from "@/infrastructure/database/connection";
 

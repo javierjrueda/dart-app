@@ -158,7 +158,10 @@ export default function Dashboard() {
 
         <Card>
           <CardHeader>
-            <CardTitle>Recent Projects</CardTitle>
+            <CardTitle>All Projects</CardTitle>
+            <CardDescription>
+              Collaborate on projects from all team members
+            </CardDescription>
           </CardHeader>
           <CardContent>
             {loading ? (
@@ -188,6 +191,7 @@ export default function Dashboard() {
                         <TableHead className="w-[300px]">
                           Project Name
                         </TableHead>
+                        <TableHead>Owner</TableHead>
                         <TableHead>Created</TableHead>
                         <TableHead>Last Updated</TableHead>
                         <TableHead className="text-right">Actions</TableHead>
@@ -202,6 +206,11 @@ export default function Dashboard() {
                         >
                           <TableCell className="font-medium">
                             {project.name}
+                          </TableCell>
+                          <TableCell className="text-sm text-neutral-600">
+                            {project.userId === (session as any)?.user?.id
+                              ? "You"
+                              : `User ${project.userId.slice(-6)}`}
                           </TableCell>
                           <TableCell>
                             {new Date(project.createdAt).toLocaleDateString()}

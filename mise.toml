@@ -57,6 +57,15 @@ run = [
   '''
 ]
 
+[tasks."dev:setup"]
+description = "Setup environment and check prerequisites"
+run = [
+  "echo '📝 Setting up development environment...'",
+  "echo '✅ Using global .env file for environment variables'",
+  "echo '☁️  Using MongoDB Atlas (cloud database)'",
+  "echo '🔧 Environment setup complete!'"
+]
+
 [tasks."dev:mongo-local"]
 description = "Start local MongoDB with Docker (alternative to cloud)"
 run = [

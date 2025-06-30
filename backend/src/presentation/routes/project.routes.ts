@@ -17,8 +17,14 @@ router.use(requireAuth);
 // POST /api/projects - Create a new project
 router.post("/", (req, res) => projectController.createProject(req, res));
 
-// GET /api/projects - Get all projects for the authenticated user
-router.get("/", (req, res) => projectController.getProjectsByUser(req, res));
+// GET /api/projects/all - Get all projects (globally accessible for collaboration)
+router.get("/all", (req, res) => projectController.getAllProjects(req, res));
+
+// GET /api/projects/my - Get projects for the authenticated user only
+router.get("/my", (req, res) => projectController.getProjectsByUser(req, res));
+
+// GET /api/projects - Get all projects (default behavior for collaboration)
+router.get("/", (req, res) => projectController.getAllProjects(req, res));
 
 // GET /api/projects/:id - Get a specific project by ID
 router.get("/:id", (req, res) => projectController.getProjectById(req, res));

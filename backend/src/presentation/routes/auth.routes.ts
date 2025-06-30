@@ -1,7 +1,11 @@
 import { Router } from "express";
 import bcrypt from "bcryptjs";
 import { MongoDBUserRepository } from "@/infrastructure/repositories/mongodb-user.repository";
-import { createAuthToken, verifyAuth } from "@/lib/auth";
+import {
+  createAuthToken,
+  verifyAuth,
+  authenticateCredentials,
+} from "@/lib/auth-utils";
 import { connectDatabase } from "@/infrastructure/database/connection";
 
 const router = Router();
@@ -67,44 +71,23 @@ router.post("/signin", async (req, res) => {
       return res.status(400).json({ error: "Missing credentials" });
     }
 
-    await connectDatabase();
-    const userRepo = new MongoDBUserRepository();
+    // Use the centralized authentication function
+    const authUser = await authenticateCredentials(email, password);
 
-    // Find user
-    const user = await userRepo.findUserByEmail(email);
-    if (!user) {
-      return res.status(401).json({ error: "Invalid credentials" });
-    }
-
-    // Check password
-    const accounts = await userRepo.findAccountsByUserId(user.id);
-    const credentialAccount = accounts.find(
-      (acc) => acc.providerId === "credential"
-    );
-
-    if (!credentialAccount || !credentialAccount.password) {
-      return res.status(401).json({ error: "Invalid credentials" });
-    }
-
-    const isPasswordValid = await bcrypt.compare(
-      password,
-      credentialAccount.password
-    );
-    if (!isPasswordValid) {
+    if (!authUser) {
       return res.status(401).json({ error: "Invalid credentials" });
     }
 
     // Create token
-    const token = await createAuthToken({
-      id: user.id,
-      email: user.email,
-      name: user.name,
-      role: user.role,
-      image: user.image,
-    });
+    const token = await createAuthToken(authUser);
+
+    // Get full user profile for response
+    await connectDatabase();
+    const userRepo = new MongoDBUserRepository();
+    const user = await userRepo.findUserById(authUser.id);
 
     return res.json({
-      user: user.toProfile(),
+      user: user?.toProfile(),
       token,
     });
   } catch (error) {

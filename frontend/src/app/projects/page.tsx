@@ -195,7 +195,8 @@ export default function ProjectsPage() {
         <div className="mb-8">
           <h1 className="text-3xl font-bold text-neutral-900 mb-4">Projects</h1>
           <p className="text-neutral-600">
-            Manage your projects here. Create new projects to get started.
+            Collaborate on all team projects. Create new projects or work on
+            existing ones.
           </p>
         </div>
 
@@ -241,9 +242,9 @@ export default function ProjectsPage() {
         {/* Projects Table */}
         <Card>
           <CardHeader>
-            <CardTitle>Your Projects</CardTitle>
+            <CardTitle>All Projects</CardTitle>
             <CardDescription>
-              Manage all your projects in one place.
+              All team projects available for collaboration.
             </CardDescription>
           </CardHeader>
           <CardContent>
@@ -254,7 +255,8 @@ export default function ProjectsPage() {
             ) : !projects || projects.length === 0 ? (
               <div className="text-center py-12">
                 <p className="text-neutral-600">
-                  No projects yet. Create your first project above!
+                  No projects available yet. Create the first team project
+                  above!
                 </p>
               </div>
             ) : (
@@ -263,6 +265,7 @@ export default function ProjectsPage() {
                   <TableHeader>
                     <TableRow>
                       <TableHead>Name</TableHead>
+                      <TableHead>Owner</TableHead>
                       <TableHead>Created</TableHead>
                       <TableHead>Last Updated</TableHead>
                     </TableRow>
@@ -276,6 +279,11 @@ export default function ProjectsPage() {
                       >
                         <TableCell className="font-medium">
                           {project.name}
+                        </TableCell>
+                        <TableCell className="text-sm text-neutral-600">
+                          {project.userId === (session as any)?.user?.id
+                            ? "You"
+                            : `User ${project.userId.slice(-6)}`}
                         </TableCell>
                         <TableCell>
                           {new Date(project.createdAt).toLocaleDateString()}
