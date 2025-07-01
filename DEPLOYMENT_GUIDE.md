@@ -9,6 +9,38 @@ This guide covers deploying the DART application (frontend and backend) to produ
 - **Database**: MongoDB (use MongoDB Atlas for production)
 - **File Storage**: Cloudflare R2 (already configured)
 
+## ⚠️ Environment-Specific Configuration Issues
+
+Before deploying, it's crucial to understand that some configurations need to be different between development and production:
+
+### 1. **Module Aliases (Backend)**
+
+- **Development**: `@` resolves to `src/` (TypeScript files)
+- **Production**: `@` resolves to `dist/` (compiled JavaScript)
+- **Error if misconfigured**: `Cannot find module '@/infrastructure/database/connection'`
+
+### 2. **API URLs (Frontend)**
+
+- **Development**: `http://localhost:3001`
+- **Production**: `https://your-backend.railway.app`
+
+### 3. **CORS Origins (Backend)**
+
+- **Development**: `http://localhost:3000`
+- **Production**: `https://your-app.vercel.app`
+
+### 4. **Database Connections**
+
+- **Development**: Can use local MongoDB or Atlas
+- **Production**: Must use MongoDB Atlas
+
+### 5. **Authentication URLs**
+
+- **Development**: `http://localhost:3000`
+- **Production**: `https://your-app.vercel.app`
+
+The solutions for these issues are covered in the deployment steps below.
+
 ## Prerequisites
 
 1. MongoDB Atlas account (free tier available)
@@ -33,28 +65,85 @@ This guide covers deploying the DART application (frontend and backend) to produ
 
 ### Option A: Deploy to Railway (Recommended)
 
-1. **Fix TypeScript Path Aliases**: First, ensure your backend can resolve TypeScript path aliases in production by installing `module-alias`:
+1. **Fix TypeScript Path Aliases**: The module aliases need different configurations for development vs production. Install `module-alias`:
 
    ```bash
    cd backend
    npm install module-alias
    ```
 
-2. **Update package.json**: Add the module aliases configuration:
+2. **Configure Environment-Specific Module Aliases**:
+
+   **The Problem**:
+
+   - Development uses `ts-node` → `@` should resolve to `src/`
+   - Production uses compiled JS → `@` should resolve to `dist/`
+
+   **Solution**: Update your `backend/package.json` to support both environments:
 
    ```json
    {
      "_moduleAliases": {
+       "@": "src"
+     },
+     "_moduleAliasesProduction": {
        "@": "dist"
      }
    }
    ```
 
-3. **Update server.ts**: Add the module alias registration at the top:
+3. **Update server.ts**: Add dynamic module alias registration:
 
    ```typescript
-   // Register module aliases first (for production)
-   import "module-alias/register";
+   // Register module aliases first (environment-aware)
+   import moduleAlias from "module-alias";
+   import path from "path";
+
+   // Configure aliases based on environment
+   if (process.env.NODE_ENV === "production") {
+     // Production: use dist folder
+     moduleAlias.addAliases({
+       "@": path.join(__dirname, "../"),
+     });
+   } else {
+     // Development: use src folder
+     moduleAlias.addAliases({
+       "@": path.join(__dirname, "../src"),
+     });
+   }
+   ```
+
+   **Alternative Approach** (simpler):
+   Create a production package.json that gets copied during build:
+
+   ```typescript
+   // In scripts/copy-package-json.js - update to handle aliases
+   const fs = require("fs");
+   const path = require("path");
+
+   const packagePath = path.join(__dirname, "../package.json");
+   const distPackagePath = path.join(__dirname, "../dist/package.json");
+
+   let packageJson = JSON.parse(fs.readFileSync(packagePath, "utf8"));
+
+   // Update aliases for production
+   if (packageJson._moduleAliases) {
+     packageJson._moduleAliases = {
+       "@": ".", // In dist, @ points to current directory
+     };
+   }
+
+   // Copy only necessary fields
+   const prodPackage = {
+     name: packageJson.name,
+     version: packageJson.version,
+     main: packageJson.main,
+     dependencies: packageJson.dependencies,
+     _moduleAliases: packageJson._moduleAliases,
+   };
+
+   fs.writeFileSync(distPackagePath, JSON.stringify(prodPackage, null, 2));
+   console.log("✅ Production package.json created with correct aliases");
    ```
 
 4. Install Railway CLI: `npm install -g @railway/cli`
@@ -260,6 +349,66 @@ MONGODB_URI=mongodb+srv://...
 - [ ] Set up SSL certificates (usually automatic)
 - [ ] Configure custom domain if needed
 
+## Environment-Specific Configuration Best Practices
+
+### 1. **Always Test Production Builds Locally**
+
+```bash
+# Backend
+cd backend
+npm run build
+NODE_ENV=production node dist/server.js
+
+# Frontend
+cd frontend
+npm run build
+npm start
+```
+
+### 2. **Use Environment Variables for All Configuration**
+
+```bash
+# ❌ Don't hardcode URLs
+const API_URL = "http://localhost:3001";
+
+# ✅ Use environment variables
+const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:3001";
+```
+
+### 3. **Validate Environment Variables at Startup**
+
+```typescript
+// backend/src/server.ts
+const requiredEnvVars = ["MONGODB_URI", "JWT_SECRET"];
+for (const envVar of requiredEnvVars) {
+  if (!process.env[envVar]) {
+    console.error(`❌ Missing required environment variable: ${envVar}`);
+    process.exit(1);
+  }
+}
+```
+
+### 4. **Use Different .env Files**
+
+```
+.env                 # Default/development
+.env.local          # Local overrides (gitignored)
+.env.production     # Production values
+.env.staging        # Staging environment
+```
+
+### 5. **Document Environment Differences**
+
+Create a `CONFIG.md` file listing all environment-specific settings:
+
+```markdown
+| Setting        | Development    | Production  |
+| -------------- | -------------- | ----------- |
+| API URL        | localhost:3001 | railway.app |
+| Module Aliases | src/           | dist/       |
+| CORS Origins   | localhost:3000 | vercel.app  |
+```
+
 ## Monitoring and Maintenance
 
 1. **Logs**: Check platform-specific logs
@@ -281,12 +430,72 @@ MONGODB_URI=mongodb+srv://...
 
 **Error**: `Cannot find module '@/infrastructure/database/connection'`
 
-**Solution**:
+**Root Cause**: Module aliases are pointing to wrong directory for the environment.
 
-1. Install `module-alias`: `npm install module-alias`
-2. Add `"_moduleAliases": { "@": "dist" }` to package.json
-3. Add `import "module-alias/register";` at the top of server.ts
-4. Rebuild and redeploy
+**Detailed Diagnosis**:
+
+- Development works because `ts-node` uses `tsconfig.json` paths
+- Production fails because compiled JS uses `package.json` `_moduleAliases`
+- If aliases point to `src/` but code is in `dist/`, module resolution fails
+
+**Complete Solution**:
+
+1. **Check your current setup**:
+
+   ```bash
+   # Check if you have the wrong alias
+   grep -A 5 "_moduleAliases" backend/package.json
+   # Should show: "@": "src" for development, "@": "dist" for production
+   ```
+
+2. **Fix with environment-aware aliases** (recommended):
+
+   ```bash
+   cd backend
+   npm install module-alias
+   ```
+
+   Update `server.ts`:
+
+   ```typescript
+   // Add at the very top, before other imports
+   import moduleAlias from "module-alias";
+   import path from "path";
+
+   if (process.env.NODE_ENV === "production") {
+     moduleAlias.addAliases({
+       "@": path.join(__dirname, "../"),
+     });
+   } else {
+     moduleAlias.addAliases({
+       "@": path.join(__dirname, "../src"),
+     });
+   }
+   ```
+
+3. **Alternative: Build-time alias fix**:
+   Update `scripts/copy-package-json.js`:
+
+   ```javascript
+   // Add this to fix aliases during build
+   if (packageJson._moduleAliases) {
+     packageJson._moduleAliases = { "@": "." };
+   }
+   ```
+
+4. **Verify the fix**:
+   ```bash
+   npm run build
+   cd dist && node server.js
+   # Should start without module errors
+   ```
+
+**Prevention**: Always test production builds locally before deploying:
+
+```bash
+npm run build
+NODE_ENV=production node dist/server.js
+```
 
 ### CORS Issues
 

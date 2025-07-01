@@ -53,6 +53,7 @@ export default function BattleArena({ projectId }: BattleArenaProps) {
   const [error, setError] = useState("");
   const [battlesCount, setBattlesCount] = useState(0);
   const [showSuccess, setShowSuccess] = useState(false);
+  const [dualFilter, setDualFilter] = useState<boolean>(false);
 
   const fetchBattlePair = async () => {
     try {
@@ -61,7 +62,7 @@ export default function BattleArena({ projectId }: BattleArenaProps) {
       const accessToken = (session as any)?.accessToken;
 
       const response = await fetch(
-        `${process.env.NEXT_PUBLIC_API_URL}/api/v1/battles/projects/${projectId}/pair`,
+        `${process.env.NEXT_PUBLIC_API_URL}/api/v1/battles/projects/${projectId}/pair?dualFilter=${dualFilter}`,
         {
           headers: {
             Authorization: `Bearer ${accessToken}`,
@@ -73,8 +74,11 @@ export default function BattleArena({ projectId }: BattleArenaProps) {
         const data = await response.json();
         setBattlePair(data);
       } else if (response.status === 404) {
+        const filterDescription = dualFilter
+          ? "both external prompt AND internal prompt (generationParams.prompt) matching"
+          : "external prompt matching";
         setError(
-          "Not enough 'Good' quality images for battle (minimum 2 required within the same prompt group). Please rate some images as 'Good' in the Gallery first, ensuring you have at least 2 good images with the same prompt number."
+          `Not enough 'Good' quality images for battle (minimum 2 required with ${filterDescription}). Please rate some images as 'Good' in the Gallery first, ensuring you have at least 2 good images with the same ${filterDescription} values.`
         );
       } else {
         setError("Failed to load battle pair");
@@ -85,6 +89,11 @@ export default function BattleArena({ projectId }: BattleArenaProps) {
     } finally {
       setLoading(false);
     }
+  };
+
+  const handleDualFilterToggle = () => {
+    setDualFilter(!dualFilter);
+    setBattlePair(null); // Clear current battle pair when switching filter
   };
 
   const conductBattle = async (result: "A" | "B" | "skip") => {
@@ -207,11 +216,12 @@ export default function BattleArena({ projectId }: BattleArenaProps) {
     [conducting, loading, battlePair, conductBattle, applyEloPenalty]
   );
 
+  // Update the useEffect to refetch when dualFilter changes
   useEffect(() => {
     if (session && projectId) {
       fetchBattlePair();
     }
-  }, [session, projectId]);
+  }, [session, projectId, dualFilter]);
 
   // Add keyboard event listeners
   useEffect(() => {
@@ -247,6 +257,31 @@ export default function BattleArena({ projectId }: BattleArenaProps) {
           <CardDescription className="text-neutral-500">
             Compare and rate your AI images
           </CardDescription>
+
+          {/* Dual Filter Controls */}
+          <div className="mt-4 flex items-center gap-3">
+            <span className="text-sm text-neutral-600 font-medium">
+              Filter Mode:
+            </span>
+            <div className="flex items-center gap-2">
+              <button
+                onClick={handleDualFilterToggle}
+                className={`px-4 py-2 text-sm font-medium rounded-lg transition-colors border ${
+                  dualFilter
+                    ? "bg-primary-500 text-white border-primary-500 hover:bg-primary-600"
+                    : "bg-white text-neutral-700 border-neutral-300 hover:bg-neutral-50"
+                }`}
+                disabled={loading || conducting}
+              >
+                {dualFilter ? "✓ Both Prompts" : "External Only"}
+              </button>
+              <span className="text-xs text-neutral-500">
+                {dualFilter
+                  ? "(external prompt + generationParams.prompt)"
+                  : "(external prompt only)"}
+              </span>
+            </div>
+          </div>
         </CardHeader>
         <CardContent>
           <div className="text-center py-12">
@@ -295,12 +330,41 @@ export default function BattleArena({ projectId }: BattleArenaProps) {
           <CardDescription className="text-neutral-500">
             No battle pair available
           </CardDescription>
+
+          {/* Dual Filter Controls */}
+          <div className="mt-4 flex items-center gap-3">
+            <span className="text-sm text-neutral-600 font-medium">
+              Filter Mode:
+            </span>
+            <div className="flex items-center gap-2">
+              <button
+                onClick={handleDualFilterToggle}
+                className={`px-4 py-2 text-sm font-medium rounded-lg transition-colors border ${
+                  dualFilter
+                    ? "bg-primary-500 text-white border-primary-500 hover:bg-primary-600"
+                    : "bg-white text-neutral-700 border-neutral-300 hover:bg-neutral-50"
+                }`}
+                disabled={loading || conducting}
+              >
+                {dualFilter ? "✓ Both Prompts" : "External Only"}
+              </button>
+              <span className="text-xs text-neutral-500">
+                {dualFilter
+                  ? "(external prompt + generationParams.prompt)"
+                  : "(external prompt only)"}
+              </span>
+            </div>
+          </div>
         </CardHeader>
         <CardContent>
           <div className="text-center py-12">
             <p className="text-neutral-600 mb-4">
-              You need at least 2 images rated as "Good" to start battles. Go to
-              the Gallery tab and rate some images first.
+              You need at least 2 images rated as "Good" within the same{" "}
+              {dualFilter
+                ? "both external prompt AND internal prompt (generationParams.prompt)"
+                : "external prompt"}
+              group to start battles. Go to the Gallery tab and rate some images
+              first.
             </p>
             <Button
               onClick={fetchBattlePair}
@@ -324,10 +388,13 @@ export default function BattleArena({ projectId }: BattleArenaProps) {
             <CardDescription className="text-neutral-500">
               Only comparing "Good" quality images • Use keys 1, 2, 3 to choose
               • Apply penalties with keys 4, 5, 6
-              {battlePair && battlePair.mediaA.prompt !== undefined && (
+              {battlePair && (
                 <span className="text-blue-600 font-medium">
                   {" "}
-                  • Prompt {battlePair.mediaA.prompt}
+                  •{" "}
+                  {dualFilter
+                    ? `Ext:${battlePair.mediaA.prompt} Int:${battlePair.mediaA.generationParams?.prompt}`
+                    : `Prompt ${battlePair.mediaA.prompt}`}
                 </span>
               )}
             </CardDescription>
@@ -337,6 +404,31 @@ export default function BattleArena({ projectId }: BattleArenaProps) {
             <p className="text-2xl font-bold text-primary-600">
               {battlesCount}
             </p>
+          </div>
+        </div>
+
+        {/* Dual Filter Controls */}
+        <div className="mt-4 flex items-center gap-3">
+          <span className="text-sm text-neutral-600 font-medium">
+            Filter Mode:
+          </span>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={handleDualFilterToggle}
+              className={`px-4 py-2 text-sm font-medium rounded-lg transition-colors border ${
+                dualFilter
+                  ? "bg-primary-500 text-white border-primary-500 hover:bg-primary-600"
+                  : "bg-white text-neutral-700 border-neutral-300 hover:bg-neutral-50"
+              }`}
+              disabled={loading || conducting}
+            >
+              {dualFilter ? "✓ Both Prompts" : "External Only"}
+            </button>
+            <span className="text-xs text-neutral-500">
+              {dualFilter
+                ? "(external prompt + generationParams.prompt)"
+                : "(external prompt only)"}
+            </span>
           </div>
         </div>
       </CardHeader>

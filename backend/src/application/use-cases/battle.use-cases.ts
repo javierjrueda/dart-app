@@ -12,7 +12,10 @@ export class BattleUseCases {
   /**
    * Get two random media items from a project for battle
    */
-  async getRandomBattlePair(projectId: string): Promise<{
+  async getRandomBattlePair(
+    projectId: string,
+    useDualPromptFilter: boolean = false
+  ): Promise<{
     mediaA: Media;
     mediaB: Media;
   } | null> {
@@ -29,28 +32,50 @@ export class BattleUseCases {
       return null; // Not enough good quality media for a battle
     }
 
-    // Group media by prompt number
-    const mediaByPrompt = new Map<number | undefined, Media[]>();
+    // Group media by prompt combination
+    const mediaByPromptGroup = new Map<string, Media[]>();
     for (const media of goodQualityMedia) {
-      const promptKey = media.prompt;
-      if (!mediaByPrompt.has(promptKey)) {
-        mediaByPrompt.set(promptKey, []);
+      let groupKey: string;
+
+      if (useDualPromptFilter) {
+        // Use both external prompt and internal prompt for grouping
+        const externalPrompt = media.prompt;
+        const internalPrompt = media.generationParams?.prompt;
+
+        // Only group if both prompts are defined
+        if (externalPrompt !== undefined && internalPrompt !== undefined) {
+          groupKey = `ext:${externalPrompt}_int:${internalPrompt}`;
+        } else {
+          continue; // Skip media that doesn't have both prompt values
+        }
+      } else {
+        // Use only external prompt for grouping (original behavior)
+        const externalPrompt = media.prompt;
+        if (externalPrompt !== undefined) {
+          groupKey = `ext:${externalPrompt}`;
+        } else {
+          continue; // Skip media without external prompt
+        }
       }
-      mediaByPrompt.get(promptKey)!.push(media);
+
+      if (!mediaByPromptGroup.has(groupKey)) {
+        mediaByPromptGroup.set(groupKey, []);
+      }
+      mediaByPromptGroup.get(groupKey)!.push(media);
     }
 
-    // Find prompts with at least 2 media items
-    const validPrompts = Array.from(mediaByPrompt.entries()).filter(
-      ([prompt, mediaList]) => mediaList.length >= 2
+    // Find prompt groups with at least 2 media items
+    const validGroups = Array.from(mediaByPromptGroup.entries()).filter(
+      ([groupKey, mediaList]) => mediaList.length >= 2
     );
 
-    if (validPrompts.length === 0) {
+    if (validGroups.length === 0) {
       return null; // No prompt groups with enough media for a battle
     }
 
     // Randomly select a prompt group
-    const [selectedPrompt, selectedMediaList] =
-      validPrompts[Math.floor(Math.random() * validPrompts.length)];
+    const [selectedGroupKey, selectedMediaList] =
+      validGroups[Math.floor(Math.random() * validGroups.length)];
 
     // Randomly select two different media items from the same prompt group
     const shuffled = [...selectedMediaList].sort(() => Math.random() - 0.5);

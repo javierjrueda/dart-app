@@ -10,7 +10,10 @@ const prodPackageJson = {
   name: packageJson.name,
   version: packageJson.version,
   main: "server.js",
-  _moduleAliases: packageJson._moduleAliases,
+  // Fix module aliases for production - @ should point to current directory (dist)
+  _moduleAliases: {
+    "@": ".",
+  },
   dependencies: packageJson.dependencies,
 };
 

@@ -7,6 +7,7 @@ export class BattleController {
   async getRandomBattlePair(req: Request, res: Response): Promise<void> {
     try {
       const { projectId } = req.params;
+      const { dualFilter } = req.query as { dualFilter?: string };
       const userId = (req as any).user?.id;
 
       if (!userId) {
@@ -19,13 +20,20 @@ export class BattleController {
         return;
       }
 
+      // Convert dualFilter query parameter to boolean
+      const useDualPromptFilter = dualFilter === "true";
+
       const battlePair = await this.battleUseCases.getRandomBattlePair(
-        projectId
+        projectId,
+        useDualPromptFilter
       );
 
       if (!battlePair) {
+        const filterDescription = useDualPromptFilter
+          ? "both external prompt AND internal prompt (generationParams.prompt) matching"
+          : "external prompt matching";
         res.status(404).json({
-          error: "Not enough media items for battle (minimum 2 required)",
+          error: `Not enough 'Good' quality images for battle (minimum 2 required with ${filterDescription}). Please rate some images as 'Good' in the Gallery first, ensuring you have at least 2 good images with the same ${filterDescription} values.`,
         });
         return;
       }
@@ -33,6 +41,7 @@ export class BattleController {
       res.json({
         mediaA: battlePair.mediaA.toJSON(),
         mediaB: battlePair.mediaB.toJSON(),
+        dualFilter: useDualPromptFilter,
       });
     } catch (error) {
       console.error("Error getting battle pair:", error);
