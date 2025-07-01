@@ -1,5 +1,19 @@
-// Register module aliases first (for production)
-import "module-alias/register";
+// Register module aliases first (environment-aware)
+const moduleAlias = require("module-alias");
+const path = require("path");
+
+// Configure aliases based on environment
+if (process.env.NODE_ENV === "production") {
+  // Production: use current directory (dist)
+  moduleAlias.addAliases({
+    "@": __dirname,
+  });
+} else {
+  // Development: use src folder
+  moduleAlias.addAliases({
+    "@": path.join(__dirname, "../src"),
+  });
+}
 
 import express from "express";
 import cors from "cors";
@@ -7,7 +21,6 @@ import helmet from "helmet";
 import morgan from "morgan";
 import rateLimit from "express-rate-limit";
 import dotenv from "dotenv";
-import path from "path";
 import { connectDatabase } from "@/infrastructure/database/connection";
 import { routes } from "@/presentation/routes";
 
