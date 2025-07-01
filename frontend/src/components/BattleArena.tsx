@@ -27,6 +27,7 @@ interface Media {
   mediaType: "image" | "video";
   elo: number;
   quality?: number; // Quality rating: -1 (bad), 0 (unrated), 1 (good)
+  prompt?: number; // Prompt number for grouping tests
   loraTraining?: string;
   promptDescription?: string;
   generationParams?: Record<string, any>;
@@ -73,7 +74,7 @@ export default function BattleArena({ projectId }: BattleArenaProps) {
         setBattlePair(data);
       } else if (response.status === 404) {
         setError(
-          "Not enough 'Good' quality images for battle (minimum 2 required). Please rate some images as 'Good' in the Gallery first."
+          "Not enough 'Good' quality images for battle (minimum 2 required within the same prompt group). Please rate some images as 'Good' in the Gallery first, ensuring you have at least 2 good images with the same prompt number."
         );
       } else {
         setError("Failed to load battle pair");
@@ -323,6 +324,12 @@ export default function BattleArena({ projectId }: BattleArenaProps) {
             <CardDescription className="text-neutral-500">
               Only comparing "Good" quality images • Use keys 1, 2, 3 to choose
               • Apply penalties with keys 4, 5, 6
+              {battlePair && battlePair.mediaA.prompt !== undefined && (
+                <span className="text-blue-600 font-medium">
+                  {" "}
+                  • Prompt {battlePair.mediaA.prompt}
+                </span>
+              )}
             </CardDescription>
           </div>
           <div className="text-right">

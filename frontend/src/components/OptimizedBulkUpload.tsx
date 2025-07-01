@@ -50,6 +50,9 @@ export default function OptimizedBulkUpload({
   const [uploading, setUploading] = useState(false);
   const [completed, setCompleted] = useState(false);
   const [concurrency, setConcurrency] = useState(10); // Concurrent uploads
+  const [promptNumber, setPromptNumber] = useState<number | undefined>(
+    undefined
+  ); // Prompt number for grouping tests
   const [error, setError] = useState("");
   const [uploadStartTime, setUploadStartTime] = useState<number | null>(null);
 
@@ -137,84 +140,77 @@ export default function OptimizedBulkUpload({
       error?: string;
     }> = [];
 
-    const uploadQueue = [...filesToUpload];
-    const activeUploads: Promise<void>[] = [];
+    // Process files in batches for cleaner concurrent handling
+    for (let i = 0; i < filesToUpload.length; i += maxConcurrency) {
+      const batch = filesToUpload.slice(i, i + maxConcurrency);
 
-    while (uploadQueue.length > 0 || activeUploads.length > 0) {
-      // Start new uploads up to the concurrency limit
-      while (activeUploads.length < maxConcurrency && uploadQueue.length > 0) {
-        const fileStatus = uploadQueue.shift()!;
+      const batchPromises = batch.map(async (fileStatus) => {
         const fileIndex = filesToUpload.indexOf(fileStatus);
 
-        const uploadPromise = (async () => {
-          try {
-            // Update status to uploading
-            setFiles((prev) =>
-              prev.map((f, i) =>
-                i === fileIndex ? { ...f, status: "uploading" } : f
-              )
-            );
+        try {
+          // Update status to uploading
+          setFiles((prev) =>
+            prev.map((f, idx) =>
+              idx === fileIndex ? { ...f, status: "uploading" } : f
+            )
+          );
 
-            if (!fileStatus.uploadUrl) {
-              throw new Error("No upload URL available");
+          if (!fileStatus.uploadUrl) {
+            throw new Error("No upload URL available");
+          }
+
+          await uploadFileToR2(
+            fileStatus.file,
+            fileStatus.uploadUrl,
+            (progress) => {
+              setFiles((prev) =>
+                prev.map((f, idx) =>
+                  idx === fileIndex ? { ...f, progress } : f
+                )
+              );
             }
+          );
 
-            await uploadFileToR2(
-              fileStatus.file,
-              fileStatus.uploadUrl,
-              (progress) => {
-                setFiles((prev) =>
-                  prev.map((f, i) => (i === fileIndex ? { ...f, progress } : f))
-                );
-              }
-            );
+          // Mark as successful
+          setFiles((prev) =>
+            prev.map((f, idx) =>
+              idx === fileIndex ? { ...f, status: "success", progress: 100 } : f
+            )
+          );
 
-            // Mark as successful
-            setFiles((prev) =>
-              prev.map((f, i) =>
-                i === fileIndex ? { ...f, status: "success", progress: 100 } : f
-              )
-            );
+          console.log(`✅ Upload successful: ${fileStatus.file.name}`);
+          return { success: true, fileIndex };
+        } catch (error) {
+          // Mark as failed
+          const errorMessage =
+            error instanceof Error ? error.message : "Unknown error";
+          setFiles((prev) =>
+            prev.map((f, idx) =>
+              idx === fileIndex
+                ? { ...f, status: "error", error: errorMessage }
+                : f
+            )
+          );
 
-            results.push({ success: true, fileIndex });
-          } catch (error) {
-            // Mark as failed
-            const errorMessage =
-              error instanceof Error ? error.message : "Unknown error";
-            setFiles((prev) =>
-              prev.map((f, i) =>
-                i === fileIndex
-                  ? { ...f, status: "error", error: errorMessage }
-                  : f
-              )
-            );
-
-            results.push({ success: false, fileIndex, error: errorMessage });
-            console.error(
-              `❌ Upload failed for "${fileStatus.file.name}":`,
-              error
-            );
-          }
-        })();
-
-        activeUploads.push(uploadPromise);
-      }
-
-      // Wait for at least one upload to complete
-      if (activeUploads.length > 0) {
-        await Promise.race(activeUploads);
-
-        // Remove completed uploads
-        for (let i = activeUploads.length - 1; i >= 0; i--) {
-          const upload = activeUploads[i];
-          try {
-            await Promise.race([upload, Promise.resolve()]);
-            activeUploads.splice(i, 1);
-          } catch {
-            // Upload is still in progress
-          }
+          console.error(
+            `❌ Upload failed for "${fileStatus.file.name}":`,
+            error
+          );
+          return { success: false, fileIndex, error: errorMessage };
         }
-      }
+      });
+
+      // Wait for all uploads in this batch to complete
+      const batchResults = await Promise.allSettled(batchPromises);
+
+      // Extract results from settled promises
+      batchResults.forEach((result) => {
+        if (result.status === "fulfilled") {
+          results.push(result.value);
+        } else {
+          console.error("Batch promise error:", result.reason);
+        }
+      });
     }
 
     return results;
@@ -223,6 +219,14 @@ export default function OptimizedBulkUpload({
   const handleBulkUpload = async () => {
     if (files.length === 0) {
       setError("Please select files to upload");
+      return;
+    }
+
+    // Validate prompt number is provided
+    if (promptNumber === undefined || promptNumber === null) {
+      setError(
+        "Test Group / Prompt Number is required. Please enter a number to group these images."
+      );
       return;
     }
 
@@ -248,7 +252,10 @@ export default function OptimizedBulkUpload({
             "Content-Type": "application/json",
             Authorization: `Bearer ${(session as any)?.accessToken}`,
           },
-          body: JSON.stringify({ files: fileMetadata }),
+          body: JSON.stringify({
+            files: fileMetadata,
+            promptNumber: promptNumber,
+          }),
         }
       );
 
@@ -276,6 +283,43 @@ export default function OptimizedBulkUpload({
       // Log skipped file details for debugging
       if (skippedDetails && skippedDetails.length > 0) {
         console.log("📋 Skipped files details:", skippedDetails);
+
+        // Enhanced logging: categorize skipped files
+        const duplicates = skippedDetails.filter(
+          (s: any) => s.reason === "Duplicate file"
+        );
+        const invalidTypes = skippedDetails.filter(
+          (s: any) => s.reason === "Invalid file type"
+        );
+        const otherSkips = skippedDetails.filter(
+          (s: any) =>
+            s.reason !== "Duplicate file" && s.reason !== "Invalid file type"
+        );
+
+        if (duplicates.length > 0) {
+          console.log(
+            `🔄 ${duplicates.length} files skipped as smart duplicates:`
+          );
+          duplicates.forEach((dup: any) => console.log(`   - ${dup.fileName}`));
+        }
+
+        if (invalidTypes.length > 0) {
+          console.log(
+            `❌ ${invalidTypes.length} files skipped due to invalid type:`
+          );
+          invalidTypes.forEach((inv: any) =>
+            console.log(`   - ${inv.fileName}`)
+          );
+        }
+
+        if (otherSkips.length > 0) {
+          console.log(
+            `⚠️ ${otherSkips.length} files skipped for other reasons:`
+          );
+          otherSkips.forEach((other: any) =>
+            console.log(`   - ${other.fileName}: ${other.reason}`)
+          );
+        }
       }
 
       // Debug: Log first presigned URL to check format
@@ -357,7 +401,13 @@ export default function OptimizedBulkUpload({
           key: f.key!,
           publicUrl: f.publicUrl!,
           mediaType: f.mediaType!,
+          prompt: promptNumber,
         }));
+
+        console.log(
+          `📤 Sending ${confirmData.length} files to confirm with prompt: ${promptNumber}`
+        );
+        console.log(`📋 Sample confirm data:`, confirmData[0]);
 
         const confirmResponse = await fetch(
           `${process.env.NEXT_PUBLIC_API_URL}/api/v1/projects/${projectId}/media/confirm-batch-upload`,
@@ -371,8 +421,20 @@ export default function OptimizedBulkUpload({
           }
         );
 
-        if (!confirmResponse.ok) {
-          console.warn("Warning: Some uploads may not be recorded in database");
+        console.log(`📥 Confirm response status:`, confirmResponse.status);
+        if (confirmResponse.ok) {
+          const confirmResult = await confirmResponse.json();
+          console.log(`📊 Confirm result:`, confirmResult);
+        } else {
+          const confirmError = await confirmResponse.text();
+          console.error(
+            "❌ Confirm batch upload failed:",
+            confirmResponse.status,
+            confirmError
+          );
+          setError(
+            `Upload confirmation failed: ${confirmResponse.status} - ${confirmError}`
+          );
         }
       }
 
@@ -449,24 +511,66 @@ export default function OptimizedBulkUpload({
             />
           </div>
 
-          {/* Settings */}
-          <div className="grid grid-cols-2 gap-4">
-            <div>
-              <label className="text-sm font-medium">
-                Max Concurrent Uploads
-              </label>
-              <select
-                value={concurrency}
-                onChange={(e) => setConcurrency(Number(e.target.value))}
-                disabled={uploading}
-                className="w-full p-2 border rounded"
-              >
-                <option value={5}>5 (Conservative)</option>
-                <option value={10}>10 (Recommended)</option>
-                <option value={20}>20 (Aggressive)</option>
-                <option value={30}>30 (Maximum)</option>
-              </select>
+          {/* Prompt Number Field - Prominent */}
+          <div className="space-y-2 p-4 bg-primary-50 border border-primary-200 rounded-lg">
+            <label className="text-sm font-medium text-primary-700">
+              Test Group / Prompt Number <span className="text-red-500">*</span>
+            </label>
+            <input
+              type="number"
+              value={promptNumber ?? ""}
+              onChange={(e) =>
+                setPromptNumber(
+                  e.target.value ? Number(e.target.value) : undefined
+                )
+              }
+              disabled={uploading}
+              className={`w-full p-3 border rounded focus:ring-1 ${
+                error && error.includes("Test Group / Prompt Number")
+                  ? "border-red-500 focus:border-red-500 focus:ring-red-500"
+                  : "border-primary-300 focus:border-primary-500 focus:ring-primary-500"
+              }`}
+              placeholder="Enter a number to group these images (e.g., 1, 2, 3...)"
+              min="0"
+              required
+            />
+            <div className="text-xs text-primary-600 space-y-1">
+              <p>
+                <strong>Important:</strong> All images uploaded together should
+                use the same prompt number if they test the same prompt with
+                different parameters.
+              </p>
+              <p>
+                Images with the same prompt number will only compete against
+                each other in battles.
+              </p>
+              <p>
+                <strong>Example:</strong> All your flux_test_008, flux_test_009,
+                etc. should use the same prompt number (e.g., "1") since they
+                test the same prompt.
+              </p>
+              <p className="text-red-600 font-medium">
+                * This field is required
+              </p>
             </div>
+          </div>
+
+          {/* Settings */}
+          <div className="space-y-2">
+            <label className="text-sm font-medium">
+              Max Concurrent Uploads
+            </label>
+            <select
+              value={concurrency}
+              onChange={(e) => setConcurrency(Number(e.target.value))}
+              disabled={uploading}
+              className="w-full p-2 border rounded"
+            >
+              <option value={5}>5 (Conservative)</option>
+              <option value={10}>10 (Recommended)</option>
+              <option value={20}>20 (Aggressive)</option>
+              <option value={30}>30 (Maximum)</option>
+            </select>
           </div>
 
           {/* Progress Stats */}

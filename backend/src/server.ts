@@ -179,7 +179,7 @@ const gracefulShutdown = async (signal: string) => {
 
   try {
     const { disconnectDatabase } = await import(
-      "@/infrastructure/database/connection"
+      "./infrastructure/database/connection"
     );
     await disconnectDatabase();
     console.log("🔌 Database disconnected");

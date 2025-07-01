@@ -29,8 +29,31 @@ export class BattleUseCases {
       return null; // Not enough good quality media for a battle
     }
 
-    // Randomly select two different media items
-    const shuffled = [...goodQualityMedia].sort(() => Math.random() - 0.5);
+    // Group media by prompt number
+    const mediaByPrompt = new Map<number | undefined, Media[]>();
+    for (const media of goodQualityMedia) {
+      const promptKey = media.prompt;
+      if (!mediaByPrompt.has(promptKey)) {
+        mediaByPrompt.set(promptKey, []);
+      }
+      mediaByPrompt.get(promptKey)!.push(media);
+    }
+
+    // Find prompts with at least 2 media items
+    const validPrompts = Array.from(mediaByPrompt.entries()).filter(
+      ([prompt, mediaList]) => mediaList.length >= 2
+    );
+
+    if (validPrompts.length === 0) {
+      return null; // No prompt groups with enough media for a battle
+    }
+
+    // Randomly select a prompt group
+    const [selectedPrompt, selectedMediaList] =
+      validPrompts[Math.floor(Math.random() * validPrompts.length)];
+
+    // Randomly select two different media items from the same prompt group
+    const shuffled = [...selectedMediaList].sort(() => Math.random() - 0.5);
     const mediaA = shuffled[0];
     const mediaB = shuffled[1];
 

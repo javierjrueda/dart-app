@@ -721,8 +721,9 @@ export class MediaController {
 
   async getBatchPresignedUrls(req: Request, res: Response): Promise<Response> {
     try {
+      // Force reload - Updated duplicate checking to consider prompt numbers
       const { projectId } = req.params;
-      const { files } = req.body; // Array of { fileName, contentType, size }
+      const { files, promptNumber } = req.body; // Array of { fileName, contentType, size } and promptNumber
 
       if (!projectId) {
         return res.status(400).json({ error: "Project ID is required" });
@@ -735,6 +736,13 @@ export class MediaController {
         });
       }
 
+      // Validate prompt number is provided
+      if (promptNumber === undefined || promptNumber === null) {
+        return res.status(400).json({
+          error: "Prompt number is required for batch upload",
+        });
+      }
+
       // Validate batch size (prevent abuse)
       if (files.length > 4000) {
         return res.status(400).json({
@@ -743,7 +751,7 @@ export class MediaController {
       }
 
       console.log(
-        `🔍 Batch presigned URLs requested for ${files.length} files in project ${projectId}`
+        `🔍 Batch presigned URLs requested for ${files.length} files in project ${projectId} with prompt ${promptNumber}`
       );
 
       const r2Service = this.getR2Service();
@@ -751,26 +759,46 @@ export class MediaController {
       const validFiles = [];
       const skippedFiles: Array<{ fileName: string; reason: string }> = [];
 
-      // Check for existing files to avoid duplicates
-      const existingFilenames = await this.mediaUseCases.getExistingFilenames(
+      // Enhanced duplicate detection: get existing files with their metadata
+      const existingMedia = await this.mediaUseCases.getMediaByProjectId(
         projectId
       );
+      const existingFileMap = new Map();
+
+      // Build a map of existing files with their metadata for smarter duplicate detection
+      existingMedia.forEach((media) => {
+        if (media.filename) {
+          // Create a composite key using filename and prompt number
+          const key = `${media.filename.toLowerCase()}_prompt_${
+            media.prompt || "undefined"
+          }`;
+          existingFileMap.set(key, {
+            filename: media.filename,
+            prompt: media.prompt,
+            generationParams: media.generationParams,
+          });
+        }
+      });
 
       console.log(
-        `📋 Found ${existingFilenames.length} existing files in project ${projectId}:`
+        `📋 Found ${existingMedia.length} existing media files in project ${projectId}`
       );
       console.log(
-        `   Existing filenames: [${existingFilenames.slice(0, 5).join(", ")}${
-          existingFilenames.length > 5 ? "..." : ""
-        }]`
+        `   Unique filename+prompt combinations: ${existingFileMap.size}`
       );
 
-      const existingSet = new Set(
-        existingFilenames.map((f) => f.toLowerCase())
-      );
+      // Debug: Show some existing entries to understand the data
+      console.log(`🔍 Sample existing entries (first 5):`);
+      let sampleCount = 0;
+      existingFileMap.forEach((value, key) => {
+        if (sampleCount < 5) {
+          console.log(`   - Key: "${key}" | Prompt: ${value.prompt}`);
+          sampleCount++;
+        }
+      });
 
       console.log(
-        `🎯 Processing ${files.length} incoming files for duplicates...`
+        `🎯 Processing ${files.length} incoming files for smart duplicates with prompt ${promptNumber}...`
       );
 
       for (const file of files) {
@@ -789,14 +817,52 @@ export class MediaController {
           continue; // Skip invalid files
         }
 
-        // Check for duplicates
-        if (existingSet.has(fileNameLower)) {
-          console.log(`🔄 Skipping ${file.fileName}: Duplicate found`);
+        // Smart duplicate checking with prompt number
+        const compositeKey = `${fileNameLower}_prompt_${promptNumber}`;
+        const isDuplicate = existingFileMap.has(compositeKey);
+
+        // Debug: Show what we're checking
+        if (
+          file.fileName.includes("flux_test_001") ||
+          file.fileName.includes("flux_test_002")
+        ) {
+          console.log(`🔍 Debug - Checking duplicate for: ${file.fileName}`);
+          console.log(`   - Composite key: "${compositeKey}"`);
+          console.log(`   - Is duplicate: ${isDuplicate}`);
+        }
+
+        if (isDuplicate) {
+          const existingFile = existingFileMap.get(compositeKey);
+          console.log(`🔄 Skipping ${file.fileName}: Duplicate detected`);
+          console.log(
+            `   🎯 Already exists with same prompt number (${promptNumber})`
+          );
+          console.log(`   📋 Existing file: ${existingFile.filename}`);
+
           skippedFiles.push({
             fileName: file.fileName,
-            reason: "Duplicate file",
+            reason: `Duplicate file (same filename and prompt number ${promptNumber})`,
           });
           continue; // Skip duplicates
+        } else {
+          // Check if same filename exists with different prompt number
+          const sameFilenameEntries = Array.from(
+            existingFileMap.entries()
+          ).filter(
+            ([key, value]) => value.filename.toLowerCase() === fileNameLower
+          );
+
+          if (sameFilenameEntries.length > 0) {
+            console.log(
+              `✅ Allowing ${file.fileName} with prompt ${promptNumber}`
+            );
+            console.log(
+              `   📋 Same filename exists with different prompt numbers:`
+            );
+            sameFilenameEntries.forEach(([key, value]) => {
+              console.log(`      - Prompt ${value.prompt}: ${value.filename}`);
+            });
+          }
         }
 
         try {
@@ -839,8 +905,8 @@ export class MediaController {
       }
 
       const totalSkipped = skippedFiles.length;
-      const duplicateCount = skippedFiles.filter(
-        (f) => f.reason === "Duplicate file"
+      const duplicateCount = skippedFiles.filter((f) =>
+        f.reason.includes("Duplicate file")
       ).length;
       const invalidTypeCount = skippedFiles.filter(
         (f) => f.reason === "Invalid file type"
@@ -848,9 +914,22 @@ export class MediaController {
 
       console.log(`📊 Batch processing complete:`);
       console.log(`   ✅ Valid files with URLs: ${presignedUrls.length}`);
-      console.log(`   🔄 Skipped duplicates: ${duplicateCount}`);
+      console.log(
+        `   🔄 Skipped duplicates (same filename + prompt): ${duplicateCount}`
+      );
       console.log(`   ❌ Skipped invalid types: ${invalidTypeCount}`);
       console.log(`   📋 Total skipped: ${totalSkipped}`);
+
+      // Enhanced debugging: log all skipped duplicates with their exact filenames
+      const duplicateSkips = skippedFiles.filter((f) =>
+        f.reason.includes("Duplicate file")
+      );
+      if (duplicateSkips.length > 0) {
+        console.log(`🔍 Detailed duplicate analysis:`);
+        duplicateSkips.forEach((skip) => {
+          console.log(`   🔄 Skipped: ${skip.fileName} - ${skip.reason}`);
+        });
+      }
 
       return res.json({
         presignedUrls,
@@ -860,7 +939,7 @@ export class MediaController {
         skippedDuplicates: duplicateCount,
         skippedInvalidTypes: invalidTypeCount,
         skippedTotal: totalSkipped,
-        skippedDetails: skippedFiles.slice(0, 10), // Only return first 10 for debugging
+        skippedDetails: skippedFiles.slice(0, 20), // Increased from 10 to 20 for better debugging
       });
     } catch (error) {
       console.error("Batch presigned URL error:", error);
@@ -876,7 +955,14 @@ export class MediaController {
   async confirmBatchUpload(req: Request, res: Response): Promise<Response> {
     try {
       const { projectId } = req.params;
-      const { uploadedFiles } = req.body; // Array of { fileName, key, publicUrl, mediaType }
+      const { uploadedFiles } = req.body; // Array of { fileName, key, publicUrl, mediaType, prompt? }
+
+      console.log(
+        `📥 Confirming batch upload for ${
+          uploadedFiles?.length || 0
+        } files in project ${projectId}`
+      );
+      console.log(`📋 Upload data sample:`, uploadedFiles?.[0]);
 
       if (!projectId) {
         return res.status(400).json({ error: "Project ID is required" });
@@ -895,18 +981,37 @@ export class MediaController {
       const batchSize = 20;
       for (let i = 0; i < uploadedFiles.length; i += batchSize) {
         const batch = uploadedFiles.slice(i, i + batchSize);
+        console.log(
+          `🔄 Processing batch ${Math.floor(i / batchSize) + 1}: ${
+            batch.length
+          } files`
+        );
 
         const batchPromises = batch.map(async (file) => {
           try {
+            // Validate prompt is provided for each file
+            if (file.prompt === undefined || file.prompt === null) {
+              throw new Error("Prompt number is required for each file");
+            }
+
+            console.log(
+              `📝 Creating media for ${file.fileName} with prompt: ${file.prompt}`
+            );
             const media = await this.mediaUseCases.createMedia({
               projectId,
               mediaUrl: file.publicUrl,
               mediaType: file.mediaType,
               filename: file.fileName,
+              prompt: file.prompt,
               extractionMethod: "filename",
             });
+            console.log(`✅ Successfully created media for ${file.fileName}`);
             return media.toJSON();
           } catch (error) {
+            console.error(
+              `❌ Failed to create media for ${file.fileName}:`,
+              error
+            );
             errors.push({
               fileName: file.fileName,
               error: error instanceof Error ? error.message : "Unknown error",
@@ -917,6 +1022,13 @@ export class MediaController {
 
         const batchResults = await Promise.all(batchPromises);
         createdMedia.push(...batchResults.filter(Boolean));
+      }
+
+      console.log(
+        `📊 Batch confirmation complete: Created ${createdMedia.length}, Errors ${errors.length}`
+      );
+      if (errors.length > 0) {
+        console.log(`❌ Errors:`, errors);
       }
 
       return res.json({

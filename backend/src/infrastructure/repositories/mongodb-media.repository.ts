@@ -9,6 +9,7 @@ interface MediaDocument extends Document {
   mediaType: "image" | "video";
   elo: number;
   quality: number; // -1 (bad), 0 (unrated), 1 (good)
+  prompt?: number; // Prompt number for grouping tests
   loraTraining?: string;
   promptDescription?: string;
   generationParams?: Record<string, any>;
@@ -25,6 +26,7 @@ const MediaSchema = new Schema(
     mediaType: { type: String, enum: ["image", "video"], required: true },
     elo: { type: Number, default: 1200, required: true },
     quality: { type: Number, default: 0, required: true, enum: [-1, 0, 1] },
+    prompt: { type: Number, required: false },
     loraTraining: { type: String, required: false },
     promptDescription: { type: String, required: false },
     generationParams: { type: Schema.Types.Mixed, required: false },
@@ -47,6 +49,7 @@ MediaSchema.index({ mediaType: 1 });
 MediaSchema.index({ elo: 1 });
 MediaSchema.index({ projectId: 1, filename: 1 });
 MediaSchema.index({ quality: 1 }); // Index for quality filtering
+MediaSchema.index({ projectId: 1, prompt: 1 }); // Index for prompt filtering
 
 const MediaModel = mongoose.model<MediaDocument>("Media", MediaSchema);
 
@@ -59,6 +62,7 @@ export class MongoDBMediaRepository implements MediaRepository {
       doc.mediaType,
       doc.elo,
       doc.quality || 0, // Default to unrated if not present
+      doc.prompt,
       doc.loraTraining,
       doc.promptDescription,
       doc.generationParams,
@@ -95,6 +99,7 @@ export class MongoDBMediaRepository implements MediaRepository {
       mediaType: media.mediaType,
       elo: media.elo,
       quality: media.quality,
+      prompt: media.prompt,
       loraTraining: media.loraTraining,
       promptDescription: media.promptDescription,
       generationParams: media.generationParams,
@@ -169,16 +174,39 @@ export class MongoDBMediaRepository implements MediaRepository {
           $not: { $eq: "" },
         },
       },
-      { filename: 1, _id: 0 }
+      { filename: 1, prompt: 1, _id: 0 }
     ).lean(); // Use lean() for better performance
 
     const filenames = docs
       .map((doc) => doc.filename)
       .filter(Boolean) as string[];
+
     console.log(
       `📋 Found ${filenames.length} existing filenames:`,
-      filenames.slice(0, 5)
+      filenames.slice(0, 10)
     );
+
+    // Enhanced logging: show filenames with their prompt numbers for debugging
+    console.log(`🔍 Detailed filename analysis (first 10):`);
+    docs.slice(0, 10).forEach((doc, index) => {
+      console.log(
+        `   ${index + 1}. ${doc.filename} (prompt: ${
+          doc.prompt || "undefined"
+        })`
+      );
+    });
+
+    // Check for potential filename patterns to identify why duplicates are detected
+    if (filenames.length > 0) {
+      const testFiles = filenames.filter((f) => f.includes("flux_test_"));
+      if (testFiles.length > 0) {
+        console.log(
+          `🧪 Found ${testFiles.length} flux_test files in existing database`
+        );
+        console.log(`   Sample flux_test files:`, testFiles.slice(0, 5));
+      }
+    }
+
     return filenames;
   }
 

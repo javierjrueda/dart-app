@@ -1,6 +1,26 @@
 import { Media } from "@/domain/entities/media.entity";
 import { MediaRepository } from "@/domain/repositories/media.repository";
 
+// Predefined lists of known generation parameters
+const PREDEFINED_SAMPLERS = [
+  "ddim",
+  "dpm_2",
+  "dpm_2_ancestral",
+  "dpmpp_2m",
+  "dpmpp_2m_sde",
+  "euler",
+  "euler_ancestral",
+];
+
+const PREDEFINED_SCHEDULERS = [
+  "normal",
+  "karras",
+  "exponential",
+  "sgm_uniform",
+  "simple",
+  "ddim_uniform",
+];
+
 export class MediaUseCases {
   constructor(private mediaRepository: MediaRepository) {}
 
@@ -27,6 +47,7 @@ export class MediaUseCases {
     mediaUrl: string;
     mediaType: "image" | "video";
     elo?: number;
+    prompt?: number;
     loraTraining?: string;
     promptDescription?: string;
     generationParams?: Record<string, any>;
@@ -50,6 +71,7 @@ export class MediaUseCases {
       mediaUrl: data.mediaUrl,
       mediaType: data.mediaType,
       elo: data.elo || 1200,
+      prompt: data.prompt,
       loraTraining: data.loraTraining,
       promptDescription: data.promptDescription,
       generationParams: data.generationParams,
@@ -292,7 +314,7 @@ export class MediaUseCases {
       }
     });
 
-    // Convert to array format
+    // Convert to array format and ensure predefined values are included
     const result: Array<{
       paramName: string;
       values: Array<{
@@ -311,26 +333,120 @@ export class MediaUseCases {
         badCount: number;
       }> = [];
 
-      valueMap.forEach((stats, valueKey) => {
-        try {
-          const value = JSON.parse(valueKey);
+      // If this is a sampler parameter, ensure all predefined samplers are included
+      if (paramName === "sampler") {
+        PREDEFINED_SAMPLERS.forEach((predefinedSampler) => {
+          const valueKey = JSON.stringify(predefinedSampler);
+          const stats = valueMap.get(valueKey) || { total: 0, good: 0, bad: 0 };
           values.push({
-            value,
+            value: predefinedSampler,
             count: stats.total,
             goodCount: stats.good,
             badCount: stats.bad,
           });
-        } catch (e) {
-          // Handle parsing errors gracefully
-          console.error(`Failed to parse value for ${paramName}: ${valueKey}`);
-        }
-      });
+        });
+
+        // Add any additional samplers found in data that aren't in predefined list
+        valueMap.forEach((stats, valueKey) => {
+          try {
+            const value = JSON.parse(valueKey);
+            if (!PREDEFINED_SAMPLERS.includes(value)) {
+              values.push({
+                value,
+                count: stats.total,
+                goodCount: stats.good,
+                badCount: stats.bad,
+              });
+            }
+          } catch (e) {
+            console.error(`Failed to parse sampler value: ${valueKey}`);
+          }
+        });
+      }
+      // If this is a scheduler parameter, ensure all predefined schedulers are included
+      else if (paramName === "scheduler") {
+        PREDEFINED_SCHEDULERS.forEach((predefinedScheduler) => {
+          const valueKey = JSON.stringify(predefinedScheduler);
+          const stats = valueMap.get(valueKey) || { total: 0, good: 0, bad: 0 };
+          values.push({
+            value: predefinedScheduler,
+            count: stats.total,
+            goodCount: stats.good,
+            badCount: stats.bad,
+          });
+        });
+
+        // Add any additional schedulers found in data that aren't in predefined list
+        valueMap.forEach((stats, valueKey) => {
+          try {
+            const value = JSON.parse(valueKey);
+            if (!PREDEFINED_SCHEDULERS.includes(value)) {
+              values.push({
+                value,
+                count: stats.total,
+                goodCount: stats.good,
+                badCount: stats.bad,
+              });
+            }
+          } catch (e) {
+            console.error(`Failed to parse scheduler value: ${valueKey}`);
+          }
+        });
+      }
+      // For other parameters, use existing logic
+      else {
+        valueMap.forEach((stats, valueKey) => {
+          try {
+            const value = JSON.parse(valueKey);
+            values.push({
+              value,
+              count: stats.total,
+              goodCount: stats.good,
+              badCount: stats.bad,
+            });
+          } catch (e) {
+            console.error(
+              `Failed to parse value for ${paramName}: ${valueKey}`
+            );
+          }
+        });
+      }
 
       // Sort values by count (most common first)
       values.sort((a, b) => b.count - a.count);
 
       result.push({ paramName, values });
     });
+
+    // Ensure sampler parameter is always included, even if no media has sampler data
+    if (!paramMap.has("sampler")) {
+      const samplerValues = PREDEFINED_SAMPLERS.map((sampler) => ({
+        value: sampler,
+        count: 0,
+        goodCount: 0,
+        badCount: 0,
+      }));
+
+      result.push({
+        paramName: "sampler",
+        values: samplerValues,
+      });
+    }
+
+    // Ensure scheduler parameter is always included, even if no media has scheduler data
+    if (!paramMap.has("scheduler")) {
+      const schedulerValues = PREDEFINED_SCHEDULERS.map((scheduler) => ({
+        value: scheduler,
+        count: 0,
+        goodCount: 0,
+        badCount: 0,
+      }));
+
+      result.push({
+        paramName: "scheduler",
+        values: schedulerValues,
+      });
+    }
 
     // Sort parameters alphabetically
     result.sort((a, b) => a.paramName.localeCompare(b.paramName));
@@ -508,42 +624,137 @@ export class MediaUseCases {
     // Calculate correlations and build parameter analysis
     const parameterAnalysis = [];
 
-    for (const [paramName, valueMap] of paramMap.entries()) {
+    // Helper function to create a parameter analysis entry
+    const createParameterAnalysis = (
+      paramName: string,
+      valueMap: Map<string, any>,
+      predefinedValues?: string[]
+    ) => {
       const values = [];
       let correlationData: { paramValues: number[]; elos: number[] } = {
         paramValues: [],
         elos: [],
       };
 
-      for (const [valueKey, stats] of valueMap.entries()) {
-        const value = JSON.parse(valueKey);
-        const averageElo =
-          stats.elos.reduce((sum, elo) => sum + elo, 0) / stats.elos.length;
-        const averageEloGoodOnly =
-          stats.goodElos.length > 0
-            ? stats.goodElos.reduce((sum, elo) => sum + elo, 0) /
-              stats.goodElos.length
-            : 0;
-        const goodRate = stats.total > 0 ? stats.good / stats.total : 0;
+      // If predefined values exist, ensure they're all included
+      if (predefinedValues) {
+        predefinedValues.forEach((predefinedValue) => {
+          const valueKey = JSON.stringify(predefinedValue);
+          const stats = valueMap.get(valueKey) || {
+            values: [],
+            elos: [],
+            goodElos: [],
+            total: 0,
+            good: 0,
+            bad: 0,
+            unrated: 0,
+          };
 
-        values.push({
-          value,
-          totalCount: stats.total,
-          goodCount: stats.good,
-          badCount: stats.bad,
-          unratedCount: stats.unrated,
-          goodRate,
-          averageElo,
-          averageEloGoodOnly,
-          minSampleSize: Math.min(stats.total, 10), // Indicator of data reliability
+          const averageElo =
+            stats.elos.length > 0
+              ? stats.elos.reduce((sum: number, elo: number) => sum + elo, 0) /
+                stats.elos.length
+              : 1200;
+          const averageEloGoodOnly =
+            stats.goodElos.length > 0
+              ? stats.goodElos.reduce(
+                  (sum: number, elo: number) => sum + elo,
+                  0
+                ) / stats.goodElos.length
+              : 0;
+          const goodRate = stats.total > 0 ? stats.good / stats.total : 0;
+
+          values.push({
+            value: predefinedValue,
+            totalCount: stats.total,
+            goodCount: stats.good,
+            badCount: stats.bad,
+            unratedCount: stats.unrated,
+            goodRate,
+            averageElo,
+            averageEloGoodOnly,
+            minSampleSize: Math.min(stats.total, 10),
+          });
         });
 
-        // For correlation calculation (if numeric parameter)
-        if (typeof value === "number") {
-          stats.elos.forEach((elo) => {
-            correlationData.paramValues.push(value);
-            correlationData.elos.push(elo);
+        // Add any additional values found in data that aren't in predefined list
+        for (const [valueKey, stats] of valueMap.entries()) {
+          try {
+            const value = JSON.parse(valueKey);
+            if (!predefinedValues.includes(value)) {
+              const averageElo =
+                stats.elos.reduce((sum: number, elo: number) => sum + elo, 0) /
+                stats.elos.length;
+              const averageEloGoodOnly =
+                stats.goodElos.length > 0
+                  ? stats.goodElos.reduce(
+                      (sum: number, elo: number) => sum + elo,
+                      0
+                    ) / stats.goodElos.length
+                  : 0;
+              const goodRate = stats.total > 0 ? stats.good / stats.total : 0;
+
+              values.push({
+                value,
+                totalCount: stats.total,
+                goodCount: stats.good,
+                badCount: stats.bad,
+                unratedCount: stats.unrated,
+                goodRate,
+                averageElo,
+                averageEloGoodOnly,
+                minSampleSize: Math.min(stats.total, 10),
+              });
+
+              // For correlation calculation (if numeric parameter)
+              if (typeof value === "number") {
+                stats.elos.forEach((elo: number) => {
+                  correlationData.paramValues.push(value);
+                  correlationData.elos.push(elo);
+                });
+              }
+            }
+          } catch (e) {
+            console.error(
+              `Failed to parse value for ${paramName}: ${valueKey}`
+            );
+          }
+        }
+      } else {
+        // For non-predefined parameters, use existing logic
+        for (const [valueKey, stats] of valueMap.entries()) {
+          const value = JSON.parse(valueKey);
+          const averageElo =
+            stats.elos.reduce((sum: number, elo: number) => sum + elo, 0) /
+            stats.elos.length;
+          const averageEloGoodOnly =
+            stats.goodElos.length > 0
+              ? stats.goodElos.reduce(
+                  (sum: number, elo: number) => sum + elo,
+                  0
+                ) / stats.goodElos.length
+              : 0;
+          const goodRate = stats.total > 0 ? stats.good / stats.total : 0;
+
+          values.push({
+            value,
+            totalCount: stats.total,
+            goodCount: stats.good,
+            badCount: stats.bad,
+            unratedCount: stats.unrated,
+            goodRate,
+            averageElo,
+            averageEloGoodOnly,
+            minSampleSize: Math.min(stats.total, 10),
           });
+
+          // For correlation calculation (if numeric parameter)
+          if (typeof value === "number") {
+            stats.elos.forEach((elo: number) => {
+              correlationData.paramValues.push(value);
+              correlationData.elos.push(elo);
+            });
+          }
         }
       }
 
@@ -559,7 +770,7 @@ export class MediaUseCases {
           correlationData.paramValues,
           correlationData.elos
         );
-        significance = correlationData.paramValues.length; // Simple significance proxy
+        significance = correlationData.paramValues.length;
       }
 
       // Sort values by ELO (Good Only) (best performing first), then by good rate as tiebreaker
@@ -572,11 +783,70 @@ export class MediaUseCases {
         return b.goodRate - a.goodRate;
       });
 
-      parameterAnalysis.push({
+      return {
         paramName,
         values,
         correlation,
         significance,
+      };
+    };
+
+    // Process all parameters with their predefined values if applicable
+    for (const [paramName, valueMap] of paramMap.entries()) {
+      if (paramName === "sampler") {
+        parameterAnalysis.push(
+          createParameterAnalysis(paramName, valueMap, PREDEFINED_SAMPLERS)
+        );
+      } else if (paramName === "scheduler") {
+        parameterAnalysis.push(
+          createParameterAnalysis(paramName, valueMap, PREDEFINED_SCHEDULERS)
+        );
+      } else {
+        parameterAnalysis.push(createParameterAnalysis(paramName, valueMap));
+      }
+    }
+
+    // Ensure sampler parameter is always included in analytics, even if no media has sampler data
+    if (!paramMap.has("sampler")) {
+      const samplerValues = PREDEFINED_SAMPLERS.map((sampler) => ({
+        value: sampler,
+        totalCount: 0,
+        goodCount: 0,
+        badCount: 0,
+        unratedCount: 0,
+        goodRate: 0,
+        averageElo: 1200,
+        averageEloGoodOnly: 0,
+        minSampleSize: 0,
+      }));
+
+      parameterAnalysis.push({
+        paramName: "sampler",
+        values: samplerValues,
+        correlation: 0,
+        significance: 0,
+      });
+    }
+
+    // Ensure scheduler parameter is always included in analytics, even if no media has scheduler data
+    if (!paramMap.has("scheduler")) {
+      const schedulerValues = PREDEFINED_SCHEDULERS.map((scheduler) => ({
+        value: scheduler,
+        totalCount: 0,
+        goodCount: 0,
+        badCount: 0,
+        unratedCount: 0,
+        goodRate: 0,
+        averageElo: 1200,
+        averageEloGoodOnly: 0,
+        minSampleSize: 0,
+      }));
+
+      parameterAnalysis.push({
+        paramName: "scheduler",
+        values: schedulerValues,
+        correlation: 0,
+        significance: 0,
       });
     }
 

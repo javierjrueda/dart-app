@@ -5,6 +5,7 @@ export interface MediaProfile {
   mediaType: "image" | "video";
   elo: number;
   quality?: number; // -1 (bad), 0 (unrated), 1 (good)
+  prompt?: number; // Prompt number for grouping tests
   loraTraining?: string;
   promptDescription?: string;
   generationParams?: Record<string, any>;
@@ -34,6 +35,7 @@ export class Media {
     public mediaType: "image" | "video",
     public elo: number = 1200,
     public quality: number = 0, // Default to unrated
+    public prompt?: number, // Prompt number for grouping tests
     public loraTraining?: string,
     public promptDescription?: string,
     public generationParams?: Record<string, any>,
@@ -49,6 +51,7 @@ export class Media {
     mediaType: "image" | "video";
     elo?: number;
     quality?: number;
+    prompt?: number;
     loraTraining?: string;
     promptDescription?: string;
     generationParams?: Record<string, any>;
@@ -62,6 +65,7 @@ export class Media {
       data.mediaType,
       data.elo || 1200,
       data.quality || 0,
+      data.prompt,
       data.loraTraining,
       data.promptDescription,
       data.generationParams,
@@ -75,9 +79,15 @@ export class Media {
       !data.generationParams &&
       data.extractionMethod !== "manual"
     ) {
-      media.generationParams = Media.extractParametersFromFilename(
+      const extractedParams = Media.extractParametersFromFilename(
         data.filename
       );
+      media.generationParams = extractedParams;
+
+      // NOTE: Prompt number is NOT automatically extracted from filenames
+      // It must be explicitly provided through the prompt field
+      // This prevents grouping errors when filename contains test numbers
+      // that don't represent actual prompt groups
     }
 
     return media;
@@ -145,6 +155,11 @@ export class Media {
     this.updatedAt = new Date();
   }
 
+  updatePrompt(prompt?: number): void {
+    this.prompt = prompt;
+    this.updatedAt = new Date();
+  }
+
   private static generateId(): string {
     return Date.now().toString(36) + Math.random().toString(36).substr(2);
   }
@@ -157,6 +172,7 @@ export class Media {
       mediaType: this.mediaType,
       elo: this.elo,
       quality: this.quality,
+      prompt: this.prompt,
       loraTraining: this.loraTraining,
       promptDescription: this.promptDescription,
       generationParams: this.generationParams,
