@@ -51,7 +51,7 @@ export class MediaUseCases {
     loraTraining?: string;
     promptDescription?: string;
     generationParams?: Record<string, any>;
-    extractionMethod?: "filename" | "metadata" | "manual";
+    extractionMethod?: "filename" | "metadata" | "manual" | "json";
     filename?: string;
   }): Promise<Media> {
     // Validation

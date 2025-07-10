@@ -13,7 +13,7 @@ interface MediaDocument extends Document {
   loraTraining?: string;
   promptDescription?: string;
   generationParams?: Record<string, any>;
-  extractionMethod: "filename" | "metadata" | "manual";
+  extractionMethod: "filename" | "metadata" | "manual" | "json";
   filename?: string;
   createdAt: Date;
   updatedAt: Date;
@@ -32,7 +32,7 @@ const MediaSchema = new Schema(
     generationParams: { type: Schema.Types.Mixed, required: false },
     extractionMethod: {
       type: String,
-      enum: ["filename", "metadata", "manual"],
+      enum: ["filename", "metadata", "manual", "json"],
       default: "filename",
       required: true,
     },

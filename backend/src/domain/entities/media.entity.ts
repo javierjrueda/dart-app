@@ -9,7 +9,7 @@ export interface MediaProfile {
   loraTraining?: string;
   promptDescription?: string;
   generationParams?: Record<string, any>;
-  extractionMethod: "filename" | "metadata" | "manual";
+  extractionMethod: "filename" | "metadata" | "manual" | "json";
   filename?: string;
   createdAt: Date;
   updatedAt: Date;
@@ -39,7 +39,11 @@ export class Media {
     public loraTraining?: string,
     public promptDescription?: string,
     public generationParams?: Record<string, any>,
-    public extractionMethod: "filename" | "metadata" | "manual" = "filename",
+    public extractionMethod:
+      | "filename"
+      | "metadata"
+      | "manual"
+      | "json" = "filename",
     public filename?: string,
     public readonly createdAt: Date = new Date(),
     public updatedAt: Date = new Date()
@@ -55,7 +59,7 @@ export class Media {
     loraTraining?: string;
     promptDescription?: string;
     generationParams?: Record<string, any>;
-    extractionMethod?: "filename" | "metadata" | "manual";
+    extractionMethod?: "filename" | "metadata" | "manual" | "json";
     filename?: string;
   }): Media {
     const media = new Media(
@@ -73,11 +77,12 @@ export class Media {
       data.filename
     );
 
-    // Extract parameters from filename if not provided manually
+    // Extract parameters from filename if not provided manually and using filename extraction
     if (
       data.filename &&
       !data.generationParams &&
-      data.extractionMethod !== "manual"
+      data.extractionMethod !== "manual" &&
+      data.extractionMethod !== "json"
     ) {
       const extractedParams = Media.extractParametersFromFilename(
         data.filename

@@ -723,7 +723,7 @@ export class MediaController {
     try {
       // Force reload - Updated duplicate checking to consider prompt numbers
       const { projectId } = req.params;
-      const { files, promptNumber } = req.body; // Array of { fileName, contentType, size } and promptNumber
+      const { files, promptNumber, jsonConfig } = req.body; // Array of { fileName, contentType, size, generationParams?, expectedInJson? } and promptNumber
 
       if (!projectId) {
         return res.status(400).json({ error: "Project ID is required" });
@@ -753,6 +753,12 @@ export class MediaController {
       console.log(
         `🔍 Batch presigned URLs requested for ${files.length} files in project ${projectId} with prompt ${promptNumber}`
       );
+
+      if (jsonConfig) {
+        console.log(
+          `📋 JSON Config: Source=${jsonConfig.source}, Expected=${jsonConfig.totalExpected}`
+        );
+      }
 
       const r2Service = this.getR2Service();
       const presignedUrls = [];
@@ -955,7 +961,7 @@ export class MediaController {
   async confirmBatchUpload(req: Request, res: Response): Promise<Response> {
     try {
       const { projectId } = req.params;
-      const { uploadedFiles } = req.body; // Array of { fileName, key, publicUrl, mediaType, prompt? }
+      const { uploadedFiles, jsonConfig } = req.body; // Now includes jsonConfig
 
       console.log(
         `📥 Confirming batch upload for ${
@@ -963,6 +969,7 @@ export class MediaController {
         } files in project ${projectId}`
       );
       console.log(`📋 Upload data sample:`, uploadedFiles?.[0]);
+      console.log(`📋 JSON config info:`, jsonConfig);
 
       if (!projectId) {
         return res.status(400).json({ error: "Project ID is required" });
@@ -997,15 +1004,38 @@ export class MediaController {
             console.log(
               `📝 Creating media for ${file.fileName} with prompt: ${file.prompt}`
             );
+
+            // Determine extraction method based on the data
+            let extractionMethod: "filename" | "metadata" | "manual" | "json" =
+              "filename";
+            let generationParams = file.generationParams || {};
+
+            if (file.generationParams?.extraction_method === "json") {
+              extractionMethod = "json";
+              // Clean up the extraction_method from generationParams to avoid storing it
+              const { extraction_method, ...cleanParams } =
+                file.generationParams;
+              generationParams = cleanParams;
+            } else if (file.generationParams?.extraction_method === "manual") {
+              extractionMethod = "manual";
+              const { extraction_method, ...cleanParams } =
+                file.generationParams;
+              generationParams = cleanParams;
+            }
+
             const media = await this.mediaUseCases.createMedia({
               projectId,
               mediaUrl: file.publicUrl,
               mediaType: file.mediaType,
               filename: file.fileName,
               prompt: file.prompt,
-              extractionMethod: "filename",
+              extractionMethod,
+              generationParams,
             });
-            console.log(`✅ Successfully created media for ${file.fileName}`);
+
+            console.log(
+              `✅ Successfully created media for ${file.fileName} with extraction method: ${extractionMethod}`
+            );
             return media.toJSON();
           } catch (error) {
             console.error(
@@ -1031,19 +1061,43 @@ export class MediaController {
         console.log(`❌ Errors:`, errors);
       }
 
+      // Log JSON config summary if provided
+      if (jsonConfig) {
+        console.log(`📋 JSON Upload Summary:`);
+        console.log(`   Source: ${jsonConfig.source}`);
+        console.log(`   Expected files: ${jsonConfig.totalExpected}`);
+        console.log(`   Found expected: ${jsonConfig.foundExpected}`);
+        console.log(`   Found extra: ${jsonConfig.foundExtra}`);
+        console.log(
+          `   Upload completion: ${(
+            (jsonConfig.foundExpected / jsonConfig.totalExpected) *
+            100
+          ).toFixed(1)}%`
+        );
+      }
+
       return res.json({
         message: "Batch upload confirmation completed",
         created: createdMedia.length,
         errors: errors.length,
         errorDetails: errors,
+        jsonSummary: jsonConfig
+          ? {
+              totalExpected: jsonConfig.totalExpected,
+              foundExpected: jsonConfig.foundExpected,
+              foundExtra: jsonConfig.foundExtra,
+              completionRate:
+                (
+                  (jsonConfig.foundExpected / jsonConfig.totalExpected) *
+                  100
+                ).toFixed(1) + "%",
+            }
+          : null,
       });
     } catch (error) {
-      console.error("Batch upload confirmation error:", error);
+      console.error("❌ Batch confirmation error:", error);
       return res.status(500).json({
-        error:
-          error instanceof Error
-            ? error.message
-            : "Failed to confirm batch upload",
+        error: error instanceof Error ? error.message : "Confirmation failed",
       });
     }
   }

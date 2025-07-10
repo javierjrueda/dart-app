@@ -37,6 +37,28 @@ interface FileUploadStatus {
   publicUrl?: string;
   key?: string;
   mediaType?: string;
+  expectedInJson?: boolean; // Whether this file was expected in the JSON
+  jsonMetadata?: any; // Metadata from JSON for this file
+}
+
+interface JsonConfig {
+  combinations: Array<{
+    id: number;
+    completed: boolean;
+    failed: boolean;
+    image_filename: string;
+    prompt_short: string;
+    prompt_full: string;
+    lora_name?: string;
+    lora_strength?: number;
+    upscale_model?: string;
+    sampler?: string;
+    scheduler?: string;
+    denoise?: number;
+    generation_time_seconds?: number;
+    [key: string]: any;
+  }>;
+  [key: string]: any;
 }
 
 export default function OptimizedBulkUpload({
@@ -46,6 +68,7 @@ export default function OptimizedBulkUpload({
 }: OptimizedBulkUploadProps) {
   const { data: session } = useSession();
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const jsonInputRef = useRef<HTMLInputElement>(null);
   const [files, setFiles] = useState<FileUploadStatus[]>([]);
   const [uploading, setUploading] = useState(false);
   const [completed, setCompleted] = useState(false);
@@ -53,6 +76,8 @@ export default function OptimizedBulkUpload({
   const [promptNumber, setPromptNumber] = useState<number | undefined>(
     undefined
   ); // Prompt number for grouping tests
+  const [jsonConfig, setJsonConfig] = useState<JsonConfig | null>(null);
+  const [jsonFile, setJsonFile] = useState<File | null>(null);
   const [error, setError] = useState("");
   const [uploadStartTime, setUploadStartTime] = useState<number | null>(null);
 
@@ -72,6 +97,81 @@ export default function OptimizedBulkUpload({
     "video/quicktime",
   ];
 
+  const handleJsonSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const selectedFile = e.target.files?.[0];
+    if (!selectedFile) return;
+
+    if (!selectedFile.name.endsWith(".json")) {
+      setError("Please select a valid JSON file");
+      return;
+    }
+
+    try {
+      const text = await selectedFile.text();
+      const config = JSON.parse(text) as JsonConfig;
+
+      // Validate JSON structure
+      if (!config.combinations || !Array.isArray(config.combinations)) {
+        throw new Error(
+          "Invalid JSON format: 'combinations' array is required"
+        );
+      }
+
+      if (config.combinations.length === 0) {
+        throw new Error("JSON configuration is empty");
+      }
+
+      // Filter out combinations without image_filename (they are errors/incomplete)
+      const validCombinations = config.combinations.filter(
+        (c) => c.image_filename && c.image_filename.trim() !== ""
+      );
+
+      const skippedCount =
+        config.combinations.length - validCombinations.length;
+
+      if (validCombinations.length === 0) {
+        throw new Error("No valid combinations found with image_filename");
+      }
+
+      // Update the config with only valid combinations
+      const cleanConfig = {
+        ...config,
+        combinations: validCombinations,
+      };
+
+      setJsonConfig(cleanConfig);
+      setJsonFile(selectedFile);
+      setError("");
+
+      console.log(
+        `📋 Loaded JSON config with ${validCombinations.length} valid files`
+      );
+      if (skippedCount > 0) {
+        console.log(
+          `⚠️ Skipped ${skippedCount} combinations without image_filename (generation errors)`
+        );
+      }
+      console.log(
+        `📋 Sample expected file:`,
+        validCombinations[0].image_filename
+      );
+
+      // Show info about skipped combinations
+      if (skippedCount > 0) {
+        setError(
+          `Info: Filtered out ${skippedCount} incomplete combinations without image files. Using ${validCombinations.length} valid combinations.`
+        );
+      }
+    } catch (error) {
+      console.error("JSON parsing error:", error);
+      setError(
+        error instanceof Error ? error.message : "Failed to parse JSON file"
+      );
+      setJsonConfig(null);
+      setJsonFile(null);
+    }
+  };
+
   const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
     const selectedFiles = Array.from(e.target.files || []);
 
@@ -79,20 +179,75 @@ export default function OptimizedBulkUpload({
       supportedTypes.includes(file.type)
     );
 
-    const fileStatuses: FileUploadStatus[] = validFiles.map((file) => ({
-      file,
-      status: "pending",
-      progress: 0,
-    }));
+    if (!jsonConfig) {
+      setError("Please upload a JSON configuration file first");
+      return;
+    }
+
+    // Match files against JSON expectations
+    const expectedFilenames = new Set(
+      jsonConfig.combinations.map((c) => c.image_filename.toLowerCase())
+    );
+
+    const fileStatuses: FileUploadStatus[] = validFiles.map((file) => {
+      const fileName = file.name.toLowerCase();
+      const expectedInJson = expectedFilenames.has(fileName);
+
+      // Find corresponding JSON metadata
+      const jsonMetadata = jsonConfig.combinations.find(
+        (c) => c.image_filename.toLowerCase() === fileName
+      );
+
+      return {
+        file,
+        status: "pending",
+        progress: 0,
+        expectedInJson,
+        jsonMetadata,
+      };
+    });
 
     setFiles(fileStatuses);
     setError("");
+
+    // Report on matching
+    const expectedCount = jsonConfig.combinations.length;
+    const foundExpected = fileStatuses.filter((f) => f.expectedInJson).length;
+    const unexpectedFiles = fileStatuses.filter(
+      (f) => !f.expectedInJson
+    ).length;
+    const missingFiles = expectedCount - foundExpected;
+
+    console.log(`📊 File matching results:`);
+    console.log(`   Expected files: ${expectedCount}`);
+    console.log(`   Found expected: ${foundExpected}`);
+    console.log(`   Missing files: ${missingFiles}`);
+    console.log(`   Unexpected files: ${unexpectedFiles}`);
 
     if (validFiles.length !== selectedFiles.length) {
       setError(
         `${
           selectedFiles.length - validFiles.length
         } files were skipped (unsupported format)`
+      );
+    }
+
+    if (missingFiles > 0) {
+      setError(
+        `Warning: ${missingFiles} expected files are missing from your selection. Check that all generated images are included.`
+      );
+    }
+
+    if (unexpectedFiles > 0) {
+      const unexpectedList = fileStatuses
+        .filter((f) => !f.expectedInJson)
+        .map((f) => f.file.name)
+        .slice(0, 3)
+        .join(", ");
+      setError(
+        `Info: ${unexpectedFiles} files were not found in the JSON config (${unexpectedList}${
+          unexpectedFiles > 3 ? "..." : ""
+        }). They will still be uploaded.`
       );
     }
   };
@@ -230,19 +385,47 @@ export default function OptimizedBulkUpload({
       return;
     }
 
+    // Validate JSON config is loaded
+    if (!jsonConfig) {
+      setError("Please upload a JSON configuration file first");
+      return;
+    }
+
     setUploading(true);
     setError("");
     setUploadStartTime(Date.now());
 
     try {
-      // Step 1: Get presigned URLs for all files
+      // Step 1: Get presigned URLs for all files with JSON metadata
       console.log("📋 Getting presigned URLs for", files.length, "files...");
 
-      const fileMetadata = files.map((f) => ({
-        fileName: f.file.name,
-        contentType: f.file.type,
-        size: f.file.size,
-      }));
+      const fileMetadata = files.map((f) => {
+        // Use JSON metadata instead of filename extraction
+        const generationParams = f.jsonMetadata
+          ? {
+              prompt_short: f.jsonMetadata.prompt_short,
+              prompt_full: f.jsonMetadata.prompt_full,
+              lora_name: f.jsonMetadata.lora_name,
+              lora_strength: f.jsonMetadata.lora_strength,
+              upscale_model: f.jsonMetadata.upscale_model,
+              sampler: f.jsonMetadata.sampler,
+              scheduler: f.jsonMetadata.scheduler,
+              denoise: f.jsonMetadata.denoise,
+              generation_time_seconds: f.jsonMetadata.generation_time_seconds,
+              combination_id: f.jsonMetadata.id,
+              completed: f.jsonMetadata.completed,
+              failed: f.jsonMetadata.failed,
+            }
+          : {};
+
+        return {
+          fileName: f.file.name,
+          contentType: f.file.type,
+          size: f.file.size,
+          generationParams,
+          expectedInJson: f.expectedInJson,
+        };
+      });
 
       const response = await fetch(
         `${process.env.NEXT_PUBLIC_API_URL}/api/v1/projects/${projectId}/media/batch-presigned-urls`,
@@ -255,6 +438,10 @@ export default function OptimizedBulkUpload({
           body: JSON.stringify({
             files: fileMetadata,
             promptNumber: promptNumber,
+            jsonConfig: {
+              source: jsonFile?.name,
+              totalExpected: jsonConfig.combinations.length,
+            },
           }),
         }
       );
@@ -402,6 +589,27 @@ export default function OptimizedBulkUpload({
           publicUrl: f.publicUrl!,
           mediaType: f.mediaType!,
           prompt: promptNumber,
+          // Send JSON metadata instead of extracting from filename
+          generationParams: f.jsonMetadata
+            ? {
+                prompt_short: f.jsonMetadata.prompt_short,
+                prompt_full: f.jsonMetadata.prompt_full,
+                lora_name: f.jsonMetadata.lora_name,
+                lora_strength: f.jsonMetadata.lora_strength,
+                upscale_model: f.jsonMetadata.upscale_model,
+                sampler: f.jsonMetadata.sampler,
+                scheduler: f.jsonMetadata.scheduler,
+                denoise: f.jsonMetadata.denoise,
+                generation_time_seconds: f.jsonMetadata.generation_time_seconds,
+                combination_id: f.jsonMetadata.id,
+                completed: f.jsonMetadata.completed,
+                failed: f.jsonMetadata.failed,
+                extraction_method: "json",
+              }
+            : {
+                extraction_method: "manual", // For files not in JSON
+              },
+          expectedInJson: f.expectedInJson,
         }));
 
         console.log(
@@ -417,7 +625,17 @@ export default function OptimizedBulkUpload({
               "Content-Type": "application/json",
               Authorization: `Bearer ${(session as any)?.accessToken}`,
             },
-            body: JSON.stringify({ uploadedFiles: confirmData }),
+            body: JSON.stringify({
+              uploadedFiles: confirmData,
+              jsonConfig: {
+                source: jsonFile?.name,
+                totalExpected: jsonConfig.combinations.length,
+                foundExpected: successfulUploads.filter((f) => f.expectedInJson)
+                  .length,
+                foundExtra: successfulUploads.filter((f) => !f.expectedInJson)
+                  .length,
+              },
+            }),
           }
         );
 
@@ -485,10 +703,10 @@ export default function OptimizedBulkUpload({
 
   return (
     <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-      <Card className="w-full max-w-4xl max-h-[90vh] overflow-hidden">
-        <CardHeader>
+      <Card className="w-full max-w-4xl max-h-[90vh] overflow-hidden flex flex-col">
+        <CardHeader className="flex-shrink-0">
           <CardTitle className="flex items-center gap-2">
-            <FontAwesomeIcon icon={faRocket} className="text-blue-500" />
+            <FontAwesomeIcon icon={faRocket} className="text-primary-500" />
             Optimized Bulk Upload
           </CardTitle>
           <p className="text-sm text-muted-foreground">
@@ -496,10 +714,39 @@ export default function OptimizedBulkUpload({
           </p>
         </CardHeader>
 
-        <CardContent className="space-y-4">
+        <CardContent className="flex-1 overflow-y-auto space-y-4 px-6">
+          {/* JSON Configuration Upload */}
+          <div className="space-y-2">
+            <label className="text-sm font-medium">
+              1. Upload JSON Configuration File{" "}
+              <span className="text-red-500">*</span>
+            </label>
+            <input
+              ref={jsonInputRef}
+              type="file"
+              accept=".json"
+              onChange={handleJsonSelect}
+              className="w-full p-2 border rounded"
+              disabled={uploading}
+            />
+            {jsonConfig && jsonFile && (
+              <div className="p-3 bg-success-50 border border-success-200 rounded">
+                <div className="text-sm text-success-700">
+                  ✅ Loaded: {jsonFile.name}
+                </div>
+                <div className="text-xs text-success-600 mt-1">
+                  Expected files: {jsonConfig.combinations.length}
+                </div>
+              </div>
+            )}
+          </div>
+
           {/* File Selection */}
           <div className="space-y-2">
-            <label className="text-sm font-medium">Select Files</label>
+            <label className="text-sm font-medium">
+              2. Select Generated Files{" "}
+              {jsonConfig && <span className="text-red-500">*</span>}
+            </label>
             <input
               ref={fileInputRef}
               type="file"
@@ -507,14 +754,56 @@ export default function OptimizedBulkUpload({
               accept=".png,.jpg,.jpeg,.gif,.webp,.mp4,.webm,.mov"
               onChange={handleFileSelect}
               className="w-full p-2 border rounded"
-              disabled={uploading}
+              disabled={uploading || !jsonConfig}
             />
+            {!jsonConfig && (
+              <div className="text-xs text-neutral-500">
+                Please upload a JSON configuration file first
+              </div>
+            )}
           </div>
+
+          {/* File Matching Summary */}
+          {files.length > 0 && jsonConfig && (
+            <div className="p-3 bg-neutral-50 border rounded">
+              <div className="text-sm font-medium mb-2">
+                File Matching Summary
+              </div>
+              <div className="grid grid-cols-4 gap-2 text-center">
+                <div className="p-2 bg-primary-100 rounded">
+                  <div className="font-semibold">
+                    {jsonConfig.combinations.length}
+                  </div>
+                  <div className="text-xs text-primary-600">Expected</div>
+                </div>
+                <div className="p-2 bg-success-100 rounded">
+                  <div className="font-semibold">
+                    {files.filter((f) => f.expectedInJson).length}
+                  </div>
+                  <div className="text-xs text-success-600">Found</div>
+                </div>
+                <div className="p-2 bg-warning-100 rounded">
+                  <div className="font-semibold">
+                    {jsonConfig.combinations.length -
+                      files.filter((f) => f.expectedInJson).length}
+                  </div>
+                  <div className="text-xs text-warning-600">Missing</div>
+                </div>
+                <div className="p-2 bg-secondary-100 rounded">
+                  <div className="font-semibold">
+                    {files.filter((f) => !f.expectedInJson).length}
+                  </div>
+                  <div className="text-xs text-secondary-600">Extra</div>
+                </div>
+              </div>
+            </div>
+          )}
 
           {/* Prompt Number Field - Prominent */}
           <div className="space-y-2 p-4 bg-primary-50 border border-primary-200 rounded-lg">
             <label className="text-sm font-medium text-primary-700">
-              Test Group / Prompt Number <span className="text-red-500">*</span>
+              3. Test Group / Prompt Number{" "}
+              <span className="text-red-500">*</span>
             </label>
             <input
               type="number"
@@ -536,18 +825,16 @@ export default function OptimizedBulkUpload({
             />
             <div className="text-xs text-primary-600 space-y-1">
               <p>
-                <strong>Important:</strong> All images uploaded together should
-                use the same prompt number if they test the same prompt with
-                different parameters.
+                <strong>Important:</strong> This number groups all images from
+                the same JSON configuration.
               </p>
               <p>
                 Images with the same prompt number will only compete against
                 each other in battles.
               </p>
               <p>
-                <strong>Example:</strong> All your flux_test_008, flux_test_009,
-                etc. should use the same prompt number (e.g., "1") since they
-                test the same prompt.
+                <strong>Example:</strong> First JSON upload = Prompt 1, Second
+                JSON upload = Prompt 2, etc.
               </p>
               <p className="text-red-600 font-medium">
                 * This field is required
@@ -621,23 +908,37 @@ export default function OptimizedBulkUpload({
 
           {/* File List */}
           {files.length > 0 && (
-            <div className="max-h-64 overflow-y-auto border rounded">
+            <div className="max-h-48 overflow-y-auto border rounded">
               {files.map((fileStatus, index) => (
                 <div
                   key={index}
-                  className="flex items-center justify-between p-2 border-b last:border-b-0"
+                  className={`flex items-center gap-4 p-3 border-b last:border-b-0 ${
+                    !fileStatus.expectedInJson ? "bg-warning-50" : ""
+                  }`}
                 >
-                  <div className="flex-1 min-w-0">
-                    <div className="text-sm font-medium truncate">
+                  {/* File Info - Reduced width */}
+                  <div className="flex-1 min-w-0 max-w-[40%]">
+                    <div
+                      className="text-sm font-medium truncate"
+                      title={fileStatus.file.name}
+                    >
                       {fileStatus.file.name}
                     </div>
-                    <div className="text-xs text-gray-500">
+                    <div className="text-xs text-neutral-500 mt-1">
                       {(fileStatus.file.size / 1024 / 1024).toFixed(1)} MB
                     </div>
+                    {/* Metadata info moved to separate line */}
+                    {fileStatus.jsonMetadata && (
+                      <div className="text-xs text-primary-600 mt-1 truncate">
+                        {fileStatus.jsonMetadata.prompt_short}
+                        {fileStatus.jsonMetadata.sampler &&
+                          ` • ${fileStatus.jsonMetadata.sampler}`}
+                      </div>
+                    )}
                     {/* Show error details for failed files */}
                     {fileStatus.status === "error" && fileStatus.error && (
                       <div
-                        className="text-xs text-red-600 mt-1 truncate"
+                        className="text-xs text-error-600 mt-1 truncate"
                         title={fileStatus.error}
                       >
                         Error: {fileStatus.error}
@@ -645,40 +946,85 @@ export default function OptimizedBulkUpload({
                     )}
                   </div>
 
-                  <div className="flex items-center gap-2">
+                  {/* Status Badge - More prominent */}
+                  <div className="flex-shrink-0">
+                    {fileStatus.expectedInJson ? (
+                      <div className="flex items-center gap-1 text-xs bg-success-100 text-success-700 px-3 py-2 rounded-md font-medium">
+                        <FontAwesomeIcon
+                          icon={faCheckCircle}
+                          className="text-success-600"
+                        />
+                        Expected
+                      </div>
+                    ) : (
+                      <div className="flex items-center gap-1 text-xs bg-warning-100 text-warning-700 px-3 py-2 rounded-md font-medium">
+                        <FontAwesomeIcon
+                          icon={faImages}
+                          className="text-warning-600"
+                        />
+                        Extra
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Progress/Status Area - More space */}
+                  <div className="flex items-center gap-3 min-w-[120px]">
                     {fileStatus.status === "uploading" && (
                       <>
-                        <div className="w-16 bg-gray-200 rounded-full h-2">
-                          <div
-                            className="bg-blue-600 h-2 rounded-full transition-all"
-                            style={{ width: `${fileStatus.progress}%` }}
-                          />
+                        <div className="flex-1 min-w-[80px]">
+                          <div className="w-full bg-neutral-200 rounded-full h-3">
+                            <div
+                              className="bg-primary-600 h-3 rounded-full transition-all flex items-center justify-center"
+                              style={{ width: `${fileStatus.progress}%` }}
+                            >
+                              {fileStatus.progress > 20 && (
+                                <span className="text-xs text-white font-medium">
+                                  {Math.round(fileStatus.progress)}%
+                                </span>
+                              )}
+                            </div>
+                          </div>
                         </div>
                         <FontAwesomeIcon
                           icon={faSpinner}
                           spin
-                          className="text-blue-500"
+                          className="text-primary-500 text-lg"
                         />
                       </>
                     )}
                     {fileStatus.status === "success" && (
-                      <FontAwesomeIcon
-                        icon={faCheckCircle}
-                        className="text-green-500"
-                      />
+                      <div className="flex items-center gap-2">
+                        <span className="text-xs text-success-600 font-medium">
+                          Complete
+                        </span>
+                        <FontAwesomeIcon
+                          icon={faCheckCircle}
+                          className="text-success-500 text-lg"
+                        />
+                      </div>
                     )}
                     {fileStatus.status === "error" && (
-                      <FontAwesomeIcon
-                        icon={faTimesCircle}
-                        className="text-red-500"
-                        title={fileStatus.error || "Upload failed"}
-                      />
+                      <div className="flex items-center gap-2">
+                        <span className="text-xs text-error-600 font-medium">
+                          Failed
+                        </span>
+                        <FontAwesomeIcon
+                          icon={faTimesCircle}
+                          className="text-error-500 text-lg"
+                          title={fileStatus.error || "Upload failed"}
+                        />
+                      </div>
                     )}
                     {fileStatus.status === "pending" && (
-                      <FontAwesomeIcon
-                        icon={faImages}
-                        className="text-gray-400"
-                      />
+                      <div className="flex items-center gap-2">
+                        <span className="text-xs text-neutral-500 font-medium">
+                          Pending
+                        </span>
+                        <FontAwesomeIcon
+                          icon={faImages}
+                          className="text-neutral-400 text-lg"
+                        />
+                      </div>
                     )}
                   </div>
                 </div>
@@ -688,61 +1034,10 @@ export default function OptimizedBulkUpload({
 
           {/* Error Display */}
           {error && (
-            <div className="p-3 bg-red-50 border border-red-200 rounded text-red-700">
+            <div className="p-3 bg-error-50 border border-error-200 rounded text-error-700">
               {error}
             </div>
           )}
-
-          {/* Action Buttons */}
-          <div className="flex justify-between">
-            <Button
-              variant="outline"
-              onClick={() => {
-                if (completed) {
-                  // Get stored results or calculate them
-                  const storedResults = (window as any)._lastUploadResults;
-                  if (storedResults) {
-                    handleClose(storedResults);
-                    delete (window as any)._lastUploadResults;
-                  } else {
-                    const results: UploadResults = {
-                      totalFiles: stats.total,
-                      successful: stats.success,
-                      failed: stats.errors,
-                      skippedDuplicates: 0,
-                      duration: uploadStartTime
-                        ? (Date.now() - uploadStartTime) / 1000
-                        : 0,
-                    };
-                    handleClose(results);
-                  }
-                } else {
-                  handleClose();
-                }
-              }}
-              disabled={uploading}
-            >
-              {completed ? "Close" : "Cancel"}
-            </Button>
-
-            <Button
-              onClick={handleBulkUpload}
-              disabled={uploading || files.length === 0}
-              className="min-w-[120px]"
-            >
-              {uploading ? (
-                <>
-                  <FontAwesomeIcon icon={faSpinner} spin className="mr-2" />
-                  Uploading...
-                </>
-              ) : (
-                <>
-                  <FontAwesomeIcon icon={faUpload} className="mr-2" />
-                  Upload {files.length} Files
-                </>
-              )}
-            </Button>
-          </div>
 
           {/* Results Summary */}
           {completed && (
@@ -852,6 +1147,59 @@ export default function OptimizedBulkUpload({
             </div>
           )}
         </CardContent>
+
+        {/* Action Buttons - Fixed at bottom */}
+        <div className="flex-shrink-0 p-6 pt-0">
+          <div className="flex justify-between">
+            <Button
+              variant="outline"
+              onClick={() => {
+                if (completed) {
+                  // Get stored results or calculate them
+                  const storedResults = (window as any)._lastUploadResults;
+                  if (storedResults) {
+                    handleClose(storedResults);
+                    delete (window as any)._lastUploadResults;
+                  } else {
+                    const results: UploadResults = {
+                      totalFiles: stats.total,
+                      successful: stats.success,
+                      failed: stats.errors,
+                      skippedDuplicates: 0,
+                      duration: uploadStartTime
+                        ? (Date.now() - uploadStartTime) / 1000
+                        : 0,
+                    };
+                    handleClose(results);
+                  }
+                } else {
+                  handleClose();
+                }
+              }}
+              disabled={uploading}
+            >
+              {completed ? "Close" : "Cancel"}
+            </Button>
+
+            <Button
+              onClick={handleBulkUpload}
+              disabled={uploading || files.length === 0 || !jsonConfig}
+              className="min-w-[120px]"
+            >
+              {uploading ? (
+                <>
+                  <FontAwesomeIcon icon={faSpinner} spin className="mr-2" />
+                  Uploading...
+                </>
+              ) : (
+                <>
+                  <FontAwesomeIcon icon={faUpload} className="mr-2" />
+                  Upload {files.length} Files
+                </>
+              )}
+            </Button>
+          </div>
+        </div>
       </Card>
     </div>
   );
