@@ -59,14 +59,15 @@ export class Battle {
 
   /**
    * Calculate new ELO ratings based on battle result
-   * Uses standard ELO formula with K-factor of 32
+   * Uses standard ELO formula with K-factor of 180 for more dramatic changes
+   * This gives approximately 60-120 point changes (5-10% of base 1200 ELO)
    */
   static calculateEloRatings(
     eloA: number,
     eloB: number,
     result: "A" | "B" | "skip"
   ): { mediaAEloAfter: number; mediaBEloAfter: number } {
-    const K_FACTOR = 32; // Can be adjusted for more/less dramatic rating changes
+    const K_FACTOR = 180; // Higher K-factor for more dramatic rating changes since battles are infrequent
 
     // Skip means no change to either rating
     if (result === "skip") {
