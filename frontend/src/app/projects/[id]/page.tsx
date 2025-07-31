@@ -120,6 +120,7 @@ function ProjectDetailPageContent() {
   const [goodImagesCount, setGoodImagesCount] = useState(0);
   const [analytics, setAnalytics] = useState<any>(null);
   const [analyticsLoading, setAnalyticsLoading] = useState(false);
+  const [viewColumns, setViewColumns] = useState(3); // New state for dynamic view
 
   const { addToast } = useToast();
 
@@ -949,6 +950,43 @@ function ProjectDetailPageContent() {
                       {totalMedia} images
                     </p>
 
+                    {/* View Columns Selector */}
+                    <div className="flex items-center space-x-2">
+                      <span className="text-sm text-neutral-600">View:</span>
+                      <div className="flex border border-neutral-300 rounded-md overflow-hidden">
+                        {[1, 2, 3, 4, 5].map((cols) => (
+                          <button
+                            key={cols}
+                            onClick={() => setViewColumns(cols)}
+                            className={`px-2 py-1 text-sm font-medium transition-colors ${
+                              viewColumns === cols
+                                ? "bg-primary-500 text-white"
+                                : "bg-white text-neutral-600 hover:bg-neutral-50"
+                            }`}
+                            title={`${cols} column${
+                              cols !== 1 ? "s" : ""
+                            } per row`}
+                          >
+                            <div className="flex items-center space-x-1">
+                              <span className="text-xs">{cols}</span>
+                              <div className="flex space-x-0.5">
+                                {Array.from({ length: cols }, (_, i) => (
+                                  <div
+                                    key={i}
+                                    className={`w-0.5 h-0.5 rounded-full ${
+                                      viewColumns === cols
+                                        ? "bg-white"
+                                        : "bg-neutral-400"
+                                    }`}
+                                  />
+                                ))}
+                              </div>
+                            </div>
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+
                     {/* Quality Filter */}
                     <div className="flex items-center space-x-2">
                       <FontAwesomeIcon
@@ -1182,7 +1220,19 @@ function ProjectDetailPageContent() {
                     <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary-500"></div>
                   </div>
                 ) : media.length > 0 ? (
-                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                  <div
+                    className={`grid gap-6 ${
+                      viewColumns === 1
+                        ? "grid-cols-1"
+                        : viewColumns === 2
+                        ? "grid-cols-1 md:grid-cols-2"
+                        : viewColumns === 3
+                        ? "grid-cols-1 md:grid-cols-2 lg:grid-cols-3"
+                        : viewColumns === 4
+                        ? "grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4"
+                        : "grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5"
+                    }`}
+                  >
                     {media.map((item) => (
                       <div
                         key={item.id}
