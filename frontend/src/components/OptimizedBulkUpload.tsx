@@ -179,8 +179,30 @@ export default function OptimizedBulkUpload({
       supportedTypes.includes(file.type)
     );
 
+    // Handle files without JSON config
     if (!jsonConfig) {
-      setError("Please upload a JSON configuration file first");
+      const fileStatuses: FileUploadStatus[] = validFiles.map((file) => ({
+        file,
+        status: "pending",
+        progress: 0,
+        expectedInJson: false, // No JSON to match against
+        jsonMetadata: undefined,
+      }));
+
+      setFiles(fileStatuses);
+      setError("");
+
+      console.log(
+        `📊 Files selected without JSON config: ${validFiles.length}`
+      );
+
+      if (validFiles.length !== selectedFiles.length) {
+        setError(
+          `${
+            selectedFiles.length - validFiles.length
+          } files were skipped (unsupported format)`
+        );
+      }
       return;
     }
 
@@ -385,11 +407,11 @@ export default function OptimizedBulkUpload({
       return;
     }
 
-    // Validate JSON config is loaded
-    if (!jsonConfig) {
-      setError("Please upload a JSON configuration file first");
-      return;
-    }
+    // JSON config is now optional
+    // if (!jsonConfig) {
+    //   setError("Please upload a JSON configuration file first");
+    //   return;
+    // }
 
     setUploading(true);
     setError("");
@@ -438,10 +460,12 @@ export default function OptimizedBulkUpload({
           body: JSON.stringify({
             files: fileMetadata,
             promptNumber: promptNumber,
-            jsonConfig: {
-              source: jsonFile?.name,
-              totalExpected: jsonConfig.combinations.length,
-            },
+            jsonConfig: jsonConfig
+              ? {
+                  source: jsonFile?.name,
+                  totalExpected: jsonConfig.combinations.length,
+                }
+              : null,
           }),
         }
       );
@@ -627,14 +651,18 @@ export default function OptimizedBulkUpload({
             },
             body: JSON.stringify({
               uploadedFiles: confirmData,
-              jsonConfig: {
-                source: jsonFile?.name,
-                totalExpected: jsonConfig.combinations.length,
-                foundExpected: successfulUploads.filter((f) => f.expectedInJson)
-                  .length,
-                foundExtra: successfulUploads.filter((f) => !f.expectedInJson)
-                  .length,
-              },
+              jsonConfig: jsonConfig
+                ? {
+                    source: jsonFile?.name,
+                    totalExpected: jsonConfig.combinations.length,
+                    foundExpected: successfulUploads.filter(
+                      (f) => f.expectedInJson
+                    ).length,
+                    foundExtra: successfulUploads.filter(
+                      (f) => !f.expectedInJson
+                    ).length,
+                  }
+                : null,
             }),
           }
         );
@@ -719,7 +747,7 @@ export default function OptimizedBulkUpload({
           <div className="space-y-2">
             <label className="text-sm font-medium">
               1. Upload JSON Configuration File{" "}
-              <span className="text-red-500">*</span>
+              <span className="text-sm text-neutral-500">(optional)</span>
             </label>
             <input
               ref={jsonInputRef}
@@ -744,8 +772,7 @@ export default function OptimizedBulkUpload({
           {/* File Selection */}
           <div className="space-y-2">
             <label className="text-sm font-medium">
-              2. Select Generated Files{" "}
-              {jsonConfig && <span className="text-red-500">*</span>}
+              2. Select Generated Files <span className="text-red-500">*</span>
             </label>
             <input
               ref={fileInputRef}
@@ -754,48 +781,71 @@ export default function OptimizedBulkUpload({
               accept=".png,.jpg,.jpeg,.gif,.webp,.mp4,.webm,.mov"
               onChange={handleFileSelect}
               className="w-full p-2 border rounded"
-              disabled={uploading || !jsonConfig}
+              disabled={uploading}
             />
-            {!jsonConfig && (
-              <div className="text-xs text-neutral-500">
-                Please upload a JSON configuration file first
-              </div>
-            )}
+            <div className="text-xs text-neutral-500">
+              {jsonConfig
+                ? "Select files that match your JSON configuration"
+                : "Select any supported image/video files"}
+            </div>
           </div>
 
-          {/* File Matching Summary */}
-          {files.length > 0 && jsonConfig && (
+          {/* File Summary */}
+          {files.length > 0 && (
             <div className="p-3 bg-neutral-50 border rounded">
-              <div className="text-sm font-medium mb-2">
-                File Matching Summary
-              </div>
-              <div className="grid grid-cols-4 gap-2 text-center">
-                <div className="p-2 bg-primary-100 rounded">
-                  <div className="font-semibold">
-                    {jsonConfig.combinations.length}
+              {jsonConfig ? (
+                // JSON Config Mode - Show matching summary
+                <>
+                  <div className="text-sm font-medium mb-2">
+                    File Matching Summary
                   </div>
-                  <div className="text-xs text-primary-600">Expected</div>
-                </div>
-                <div className="p-2 bg-success-100 rounded">
-                  <div className="font-semibold">
-                    {files.filter((f) => f.expectedInJson).length}
+                  <div className="grid grid-cols-4 gap-2 text-center">
+                    <div className="p-2 bg-primary-100 rounded">
+                      <div className="font-semibold">
+                        {jsonConfig.combinations.length}
+                      </div>
+                      <div className="text-xs text-primary-600">Expected</div>
+                    </div>
+                    <div className="p-2 bg-success-100 rounded">
+                      <div className="font-semibold">
+                        {files.filter((f) => f.expectedInJson).length}
+                      </div>
+                      <div className="text-xs text-success-600">Found</div>
+                    </div>
+                    <div className="p-2 bg-warning-100 rounded">
+                      <div className="font-semibold">
+                        {jsonConfig.combinations.length -
+                          files.filter((f) => f.expectedInJson).length}
+                      </div>
+                      <div className="text-xs text-warning-600">Missing</div>
+                    </div>
+                    <div className="p-2 bg-secondary-100 rounded">
+                      <div className="font-semibold">
+                        {files.filter((f) => !f.expectedInJson).length}
+                      </div>
+                      <div className="text-xs text-secondary-600">Extra</div>
+                    </div>
                   </div>
-                  <div className="text-xs text-success-600">Found</div>
-                </div>
-                <div className="p-2 bg-warning-100 rounded">
-                  <div className="font-semibold">
-                    {jsonConfig.combinations.length -
-                      files.filter((f) => f.expectedInJson).length}
+                </>
+              ) : (
+                // No JSON Config - Show simple file count
+                <>
+                  <div className="text-sm font-medium mb-2">Files Selected</div>
+                  <div className="flex justify-center">
+                    <div className="p-2 bg-primary-100 rounded text-center">
+                      <div className="font-semibold text-lg">
+                        {files.length}
+                      </div>
+                      <div className="text-xs text-primary-600">
+                        Files Ready
+                      </div>
+                    </div>
                   </div>
-                  <div className="text-xs text-warning-600">Missing</div>
-                </div>
-                <div className="p-2 bg-secondary-100 rounded">
-                  <div className="font-semibold">
-                    {files.filter((f) => !f.expectedInJson).length}
+                  <div className="text-xs text-neutral-500 mt-2 text-center">
+                    All files will be uploaded without JSON metadata
                   </div>
-                  <div className="text-xs text-secondary-600">Extra</div>
-                </div>
-              </div>
+                </>
+              )}
             </div>
           )}
 
@@ -826,15 +876,15 @@ export default function OptimizedBulkUpload({
             <div className="text-xs text-primary-600 space-y-1">
               <p>
                 <strong>Important:</strong> This number groups all images from
-                the same JSON configuration.
+                the same {jsonConfig ? "JSON configuration" : "upload batch"}.
               </p>
               <p>
                 Images with the same prompt number will only compete against
                 each other in battles.
               </p>
               <p>
-                <strong>Example:</strong> First JSON upload = Prompt 1, Second
-                JSON upload = Prompt 2, etc.
+                <strong>Example:</strong> First upload = Prompt 1, Second upload
+                = Prompt 2, etc.
               </p>
               <p className="text-red-600 font-medium">
                 * This field is required
@@ -1183,7 +1233,7 @@ export default function OptimizedBulkUpload({
 
             <Button
               onClick={handleBulkUpload}
-              disabled={uploading || files.length === 0 || !jsonConfig}
+              disabled={uploading || files.length === 0}
               className="min-w-[120px]"
             >
               {uploading ? (
