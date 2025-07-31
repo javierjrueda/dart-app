@@ -37,6 +37,7 @@ const nextConfig = {
               "font-src 'self' https://fonts.gstatic.com data:",
               "img-src 'self' data: blob: https:",
               // Allow localhost connections in development, only HTTPS in production
+              // Explicitly block WebSocket connections in production to prevent dev tool errors
               `connect-src 'self' https: ${
                 isDevelopment ? "http://localhost:* ws://localhost:*" : ""
               }`,

@@ -1,6 +1,14 @@
 import { NextRequest, NextResponse } from "next/server";
 
 export async function GET(request: NextRequest) {
+  // Disable debug endpoint in production for security
+  if (process.env.NODE_ENV === "production") {
+    return NextResponse.json(
+      { error: "Debug endpoint disabled in production" },
+      { status: 404 }
+    );
+  }
+
   const debugInfo = {
     timestamp: new Date().toISOString(),
     environment: {

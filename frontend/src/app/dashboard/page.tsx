@@ -58,10 +58,13 @@ export default function Dashboard() {
       setError("");
       const accessToken = (session as any)?.accessToken;
 
-      console.log("=== DEBUG: Dashboard project fetch ===");
-      console.log("Session object:", session);
-      console.log("Access token found:", !!accessToken);
-      console.log("API URL:", process.env.NEXT_PUBLIC_API_URL);
+      // Debug logs only in development
+      if (process.env.NODE_ENV === "development") {
+        console.log("=== DEBUG: Dashboard project fetch ===");
+        console.log("Session object:", session);
+        console.log("Access token found:", !!accessToken);
+        console.log("API URL:", process.env.NEXT_PUBLIC_API_URL);
+      }
 
       if (!accessToken) {
         console.error("No access token found in session:", session);
@@ -69,10 +72,12 @@ export default function Dashboard() {
         return;
       }
 
-      console.log(
-        "Making API request to:",
-        `${process.env.NEXT_PUBLIC_API_URL}/api/v1/projects?page=${currentPage}&limit=${projectsPerPage}`
-      );
+      if (process.env.NODE_ENV === "development") {
+        console.log(
+          "Making API request to:",
+          `${process.env.NEXT_PUBLIC_API_URL}/api/v1/projects?page=${currentPage}&limit=${projectsPerPage}`
+        );
+      }
 
       const response = await fetch(
         `${process.env.NEXT_PUBLIC_API_URL}/api/v1/projects?page=${currentPage}&limit=${projectsPerPage}`,
@@ -83,15 +88,19 @@ export default function Dashboard() {
         }
       );
 
-      console.log("API Response status:", response.status);
-      console.log(
-        "API Response headers:",
-        Object.fromEntries(response.headers.entries())
-      );
+      if (process.env.NODE_ENV === "development") {
+        console.log("API Response status:", response.status);
+        console.log(
+          "API Response headers:",
+          Object.fromEntries(response.headers.entries())
+        );
+      }
 
       if (response.ok) {
         const data = await response.json();
-        console.log("Projects data received:", data);
+        if (process.env.NODE_ENV === "development") {
+          console.log("Projects data received:", data);
+        }
 
         if (data.projects && Array.isArray(data.projects)) {
           setProjects(data.projects);
@@ -106,8 +115,10 @@ export default function Dashboard() {
         }
       } else {
         const errorText = await response.text();
-        console.error("API Error response:", errorText);
-        console.error("Failed to fetch projects", response.status);
+        if (process.env.NODE_ENV === "development") {
+          console.error("API Error response:", errorText);
+          console.error("Failed to fetch projects", response.status);
+        }
         if (response.status === 401) {
           setError("Authentication error: Please sign out and sign in again");
         } else {

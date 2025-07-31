@@ -59,10 +59,13 @@ export default function ProjectsPage() {
       setLoading(true);
       const accessToken = (session as any)?.accessToken;
 
-      console.log("=== DEBUG: Project fetch attempt ===");
-      console.log("Session object:", session);
-      console.log("Access token found:", !!accessToken);
-      console.log("API URL:", process.env.NEXT_PUBLIC_API_URL);
+      // Debug logs only in development
+      if (process.env.NODE_ENV === "development") {
+        console.log("=== DEBUG: Project fetch attempt ===");
+        console.log("Session object:", session);
+        console.log("Access token found:", !!accessToken);
+        console.log("API URL:", process.env.NEXT_PUBLIC_API_URL);
+      }
 
       if (!accessToken) {
         console.error("No access token found in session:", session);
@@ -72,10 +75,12 @@ export default function ProjectsPage() {
         return;
       }
 
-      console.log(
-        "Making API request to:",
-        `${process.env.NEXT_PUBLIC_API_URL}/api/v1/projects`
-      );
+      if (process.env.NODE_ENV === "development") {
+        console.log(
+          "Making API request to:",
+          `${process.env.NEXT_PUBLIC_API_URL}/api/v1/projects`
+        );
+      }
 
       const response = await fetch(
         `${process.env.NEXT_PUBLIC_API_URL}/api/v1/projects`,
@@ -86,25 +91,31 @@ export default function ProjectsPage() {
         }
       );
 
-      console.log("API Response status:", response.status);
-      console.log(
-        "API Response headers:",
-        Object.fromEntries(response.headers.entries())
-      );
+      if (process.env.NODE_ENV === "development") {
+        console.log("API Response status:", response.status);
+        console.log(
+          "API Response headers:",
+          Object.fromEntries(response.headers.entries())
+        );
+      }
 
       if (response.ok) {
         const projectsData = await response.json();
-        console.log("Projects data received:", projectsData);
+        if (process.env.NODE_ENV === "development") {
+          console.log("Projects data received:", projectsData);
+        }
         // Handle paginated response structure
         setProjects(projectsData.projects || projectsData);
       } else {
         const errorText = await response.text();
-        console.error("API Error response:", errorText);
-        console.error(
-          "Failed to fetch projects",
-          response.status,
-          response.statusText
-        );
+        if (process.env.NODE_ENV === "development") {
+          console.error("API Error response:", errorText);
+          console.error(
+            "Failed to fetch projects",
+            response.status,
+            response.statusText
+          );
+        }
         if (response.status === 401) {
           setError("Authentication error: Please sign out and sign in again.");
         } else {
