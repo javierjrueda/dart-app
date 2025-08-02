@@ -42,6 +42,7 @@ import {
   faChevronDown,
   faChevronUp,
   faChartBar,
+  faDownload,
 } from "@fortawesome/free-solid-svg-icons";
 
 interface Project {
@@ -63,6 +64,7 @@ interface Media {
   promptDescription?: string;
   generationParams?: Record<string, any>;
   extractionMethod: "filename" | "metadata" | "manual";
+  filename?: string; // Added filename property for export functionality
   createdAt: string;
   updatedAt: string;
 }
@@ -539,6 +541,48 @@ function ProjectDetailPageContent() {
 
   const clearSelection = () => {
     setSelectedMedia(new Set());
+  };
+
+  const exportGoodImageFilenames = () => {
+    // Filter for good quality images (quality === 1) and extract filenames
+    const goodImages = allMedia.filter((item) => item.quality === 1);
+    const filenames = goodImages
+      .map((item) => item.filename)
+      .filter((filename) => filename) // Remove any undefined filenames
+      .sort(); // Sort alphabetically for better organization
+
+    if (filenames.length === 0) {
+      addToast({
+        type: "warning",
+        title: "No Good Images Found",
+        description: "No images with 'good' quality rating found to export.",
+        duration: 3000,
+      });
+      return;
+    }
+
+    // Create the content as a simple text list
+    const content = filenames.join("\n");
+
+    // Create and download the file
+    const blob = new Blob([content], { type: "text/plain" });
+    const url = window.URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = `good-images-${project?.name || "project"}-${
+      new Date().toISOString().split("T")[0]
+    }.txt`;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    window.URL.revokeObjectURL(url);
+
+    addToast({
+      type: "success",
+      title: "Export Successful",
+      description: `Exported ${filenames.length} good image filenames to ${link.download}`,
+      duration: 3000,
+    });
   };
 
   // Keyboard shortcuts for quality rating
@@ -1048,6 +1092,18 @@ function ProjectDetailPageContent() {
                         />
                       </Button>
                     )}
+
+                    {/* Export Good Images Button */}
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={exportGoodImageFilenames}
+                      className="border-neutral-300 text-primary-600 hover:text-primary-700 hover:border-primary-400"
+                      disabled={goodImagesCount === 0}
+                    >
+                      <FontAwesomeIcon icon={faDownload} className="mr-2" />
+                      Export Good ({goodImagesCount})
+                    </Button>
                   </div>
 
                   {/* Pagination controls */}
