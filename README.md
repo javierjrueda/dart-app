@@ -1,168 +1,111 @@
-# DART - Dreamshot Annotation & Ranking Tool
+# 🎯 DART - AI Image Ranking Arena
 
-A comprehensive tool for annotating and ranking dreamshots, built with modern web technologies and Domain Driven Design principles.
+<div align="center">
 
-## Architecture
+### Battle-test your AI-generated images. Let ELO decide which generation parameters actually win.
 
-- **Backend**: Node.js with Express, following Domain Driven Design
-- **Frontend**: Next.js with React
-- **Database**: MongoDB Atlas
-- **Development**: mise + orbstack
-- **Architecture**: Domain Driven Design (DDD)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg?style=for-the-badge)](LICENSE)
+[![TypeScript](https://img.shields.io/badge/typescript-%23007ACC.svg?style=for-the-badge&logo=typescript&logoColor=white)](https://www.typescriptlang.org/)
+[![Next JS](https://img.shields.io/badge/Next-black?style=for-the-badge&logo=next.js&logoColor=white)](https://nextjs.org/)
+[![MongoDB](https://img.shields.io/badge/MongoDB-%234ea94b.svg?style=for-the-badge&logo=mongodb&logoColor=white)](https://www.mongodb.com/)
+[![Built by Dreamshot.io](https://img.shields.io/badge/Built_by-Dreamshot.io-blue?style=for-the-badge)](https://dreamshot.io)
 
-## Project Structure
+</div>
 
-```
-dart/
-├── backend/           # Node.js backend with DDD structure
-│   ├── src/
-│   │   ├── domain/    # Domain entities, value objects, repositories
-│   │   ├── application/ # Use cases, services
-│   │   ├── infrastructure/ # Database, external APIs
-│   │   └── presentation/ # Controllers, routes
-│   └── package.json
-├── frontend/          # Next.js frontend
-│   ├── src/
-│   │   ├── app/       # App router pages
-│   │   ├── components/ # Reusable components
-│   │   └── lib/       # Utilities and configurations
-│   └── package.json
-├── mise.toml          # Development environment configuration
-└── README.md
-```
+## 💡 Why
+
+When you generate thousands of AI images sweeping LoRAs, samplers, schedulers and denoise strengths, "which settings are best" stops being answerable by eyeballing folders. DART turns it into a tournament: upload batches, run pairwise battles, and let an ELO rating surface the parameter combinations that consistently win. Self-hosted, your images never leave your infrastructure.
+
+## 🌟 Features
+
+- ⚔️ **Battle Arena**: pairwise image comparisons, one click per duel
+- 📈 **ELO Ranking**: ratings converge on the truly best outputs (configurable K-factor)
+- 🧪 **Parameter Insights**: attach generation metadata (LoRA, sampler, scheduler, denoise) and see which settings climb the ladder
+- 🖼️ **Bulk Upload**: drag in image batches with or without JSON metadata
+- 🗳️ **Smart Annotation**: coordinate-based tagging on any image
+- 📤 **Export Winners**: dump top-ranked image filenames to txt for training pipelines
+- 🏠 **Self-hosted**: Node + Next.js + MongoDB, images on your own S3-compatible storage
+- 🧱 **DDD Architecture**: clean domain/application/infrastructure/presentation layering, full TypeScript
 
 ## 🚀 Quick Start
 
-The DART application uses [mise](https://mise.jdx.dev/) for unified development environment management.
-
-### Prerequisites
-
-- [mise](https://mise.jdx.dev/) installed
-- [orbstack](https://orbstack.dev/) (optional, for enhanced Docker performance)
-
-### One-Command Setup
+DART uses [mise](https://mise.jdx.dev/) for one-command setup.
 
 ```bash
-# Trust the mise configuration
-mise trust
-
-# Install dependencies
-mise run install
-
-# Start development servers
-mise run dev
+mise trust          # trust the mise configuration
+mise run install    # install all dependencies
+mise run dev        # start everything
 ```
 
-This will start:
+That's it:
 
 - **Frontend**: http://localhost:3000
 - **Backend API**: http://localhost:3001
-- **API Health Check**: http://localhost:3001/health
+- **Health check**: http://localhost:3001/health
 
-### Development Features
+Other commands: `mise run clean` (remove node_modules/builds) and `mise run reset` (clean + reinstall).
 
-- **Hot Reload**: Both backend and frontend automatically reload on changes
-- **Unified Environment**: All configuration managed through `mise.toml`
-- **Simple Commands**: Just `mise run dev` to start everything
+## 🏗️ Project Structure
 
-### Available Commands
-
-```bash
-# Install all dependencies
-mise run install
-
-# Start development servers
-mise run dev
-
-# Clean project (remove node_modules, build files)
-mise run clean
-
-# Clean and reinstall everything
-mise run reset
+```
+dart/
+├── backend/             # Node.js + Express, DDD layout
+│   └── src/
+│       ├── domain/          # Entities, value objects, repositories
+│       ├── application/     # Use cases, services
+│       ├── infrastructure/  # MongoDB, storage, external APIs
+│       └── presentation/    # Controllers, routes
+├── frontend/            # Next.js (App Router) + Tailwind
+│   └── src/
+│       ├── app/             # Pages
+│       ├── components/      # Reusable components
+│       └── lib/             # Utilities
+└── mise.toml            # Unified dev environment + env vars
 ```
 
-## 🌍 Environment Configuration
+## 🌍 Environment
 
-All environment variables are managed through `mise.toml`. The setup automatically creates:
+All variables are managed through `mise.toml`, which generates `backend/.env` and `frontend/.env.local`:
 
-- `backend/.env` - Backend configuration
-- `frontend/.env.local` - Frontend configuration
+| Variable | Purpose |
+|---|---|
+| `MONGODB_URI` | MongoDB connection string |
+| `JWT_SECRET` | JWT signing secret |
+| `FRONTEND_URL` | Frontend URL for CORS |
+| `NEXT_PUBLIC_API_URL` | API URL for the frontend |
 
-Key environment variables (configured in `mise.toml`):
+## 🔧 API
 
-- `MONGODB_URI` - MongoDB Atlas connection string
-- `JWT_SECRET` - JWT signing secret
-- `NODE_ENV` - Environment mode
-- `FRONTEND_URL` - Frontend URL for CORS
-- `NEXT_PUBLIC_API_URL` - API URL for frontend
-
-## 🔧 API Endpoints
-
-- `GET /api/health` - API health check
-- `GET /api/v1/dreamshots` - Get all dreamshots
-- `GET /api/v1/dreamshots/:id` - Get dreamshot by ID
-- `POST /api/v1/dreamshots` - Create new dreamshot
-- `PUT /api/v1/dreamshots/:id` - Update dreamshot
-- `DELETE /api/v1/dreamshots/:id` - Delete dreamshot
-- `POST /api/v1/dreamshots/:id/annotations` - Add annotation
-- `PUT /api/v1/dreamshots/:id/ranking` - Update ranking
-
-## 🗂️ Database Schema
-
-The application uses MongoDB with the following main collection:
-
-### Dreamshots Collection
-
-```javascript
-{
-  title: String,
-  description: String,
-  imageUrl: String,
-  author: String,
-  annotations: [{
-    id: String,
-    text: String,
-    author: String,
-    timestamp: Date,
-    coordinates: { x: Number, y: Number }
-  }],
-  ranking: {
-    score: Number,
-    votes: Number,
-    averageRating: Number
-  },
-  tags: [String],
-  isPublic: Boolean,
-  createdAt: Date,
-  updatedAt: Date
-}
+```
+GET    /api/v1/dreamshots                 # list images
+POST   /api/v1/dreamshots                 # create
+GET    /api/v1/dreamshots/:id             # detail
+PUT    /api/v1/dreamshots/:id             # update
+DELETE /api/v1/dreamshots/:id             # delete
+POST   /api/v1/dreamshots/:id/annotations # annotate
+PUT    /api/v1/dreamshots/:id/ranking     # update ELO
+GET    /api/health                        # health check
 ```
 
-## 🎯 Features
-
-- **Smart Annotation**: Add precise annotations with coordinate-based tagging
-- **Advanced Ranking**: Sophisticated scoring system with community voting
-- **Real-time Collaboration**: Work together with your team in real-time
-- **Domain Driven Design**: Clean, maintainable architecture
-- **MongoDB Integration**: Flexible document-based storage
-- **TypeScript**: Full type safety across the stack
-- **Modern UI**: Beautiful, responsive design with Tailwind CSS
+Each image document carries its annotations (with x/y coordinates), its ranking (score, votes, average) and free-form tags. See the domain models in `backend/src/domain/`.
 
 ## 🤝 Contributing
 
 1. Fork the repository
 2. Create your feature branch (`git checkout -b feature/amazing-feature`)
-3. Commit your changes (`git commit -m 'Add some amazing feature'`)
-4. Push to the branch (`git push origin feature/amazing-feature`)
-5. Open a Pull Request
+3. Commit your changes
+4. Open a Pull Request
 
 ## 📝 License
 
-This project is licensed under the MIT License.
+MIT - see [LICENSE](LICENSE).
 
-## 🙏 Acknowledgments
+---
 
-- Built with Next.js, Node.js, and MongoDB
-- Styled with Tailwind CSS
-- Icons by Lucide React
-- Development environment powered by mise
+<div align="center">
+
+Made with ❤️ by [javierjrueda](https://github.com/javierjrueda) at [Dreamshot.io](https://dreamshot.io)
+
+[🌟 Star this repo](https://github.com/javierjrueda/dart-app) | [🐛 Report bug](https://github.com/javierjrueda/dart-app/issues) | [🤝 Contribute](https://github.com/javierjrueda/dart-app/pulls)
+
+</div>
