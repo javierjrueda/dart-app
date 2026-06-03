@@ -161,3 +161,4 @@ mongo-data/
 *.temp 
 frontend/.env.production
 .vercel
+training_config.json
